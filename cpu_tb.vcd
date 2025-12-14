@@ -1,0 +1,329 @@
+$date
+	Sun Dec 14 21:18:45 2025
+$end
+$version
+	Icarus Verilog
+$end
+$timescale
+	1ns
+$end
+$scope module cpu_tb $end
+$var reg 1 ! clk $end
+$var reg 1 " rst $end
+$scope module dut $end
+$var wire 1 ! clk $end
+$var wire 1 " rst $end
+$var wire 1 # zero $end
+$var wire 16 $ write_back_data [15:0] $end
+$var wire 4 % rs2_sel [3:0] $end
+$var wire 16 & rs2_data [15:0] $end
+$var wire 4 ' rs1_sel [3:0] $end
+$var wire 16 ( rs1_data [15:0] $end
+$var wire 1 ) reg_write $end
+$var wire 4 * rd_sel [3:0] $end
+$var wire 8 + pc [7:0] $end
+$var wire 8 , next_pc [7:0] $end
+$var wire 1 - mem_write $end
+$var wire 1 . mem_to_reg $end
+$var wire 16 / mem_read_data [15:0] $end
+$var wire 1 0 mem_read $end
+$var wire 16 1 instr [15:0] $end
+$var wire 1 2 alu_src $end
+$var wire 16 3 alu_result [15:0] $end
+$var wire 4 4 alu_op [3:0] $end
+$var wire 16 5 alu_b [15:0] $end
+$scope module alu0 $end
+$var wire 16 6 b [15:0] $end
+$var wire 1 # zero $end
+$var wire 4 7 alu_control [3:0] $end
+$var wire 16 8 a [15:0] $end
+$var reg 16 9 alu_result [15:0] $end
+$upscope $end
+$scope module cu $end
+$var wire 4 : opcode [3:0] $end
+$var reg 4 ; alu_op [3:0] $end
+$var reg 1 2 alu_src $end
+$var reg 1 0 mem_read $end
+$var reg 1 . mem_to_reg $end
+$var reg 1 - mem_write $end
+$var reg 1 ) reg_write $end
+$upscope $end
+$scope module dmem0 $end
+$var wire 8 < addr [7:0] $end
+$var wire 1 ! clk $end
+$var wire 1 0 mem_read $end
+$var wire 1 - mem_write $end
+$var wire 16 = write_data [15:0] $end
+$var wire 16 > read_data [15:0] $end
+$var integer 32 ? i [31:0] $end
+$upscope $end
+$scope module imem0 $end
+$var wire 16 @ instr [15:0] $end
+$var wire 8 A addr [7:0] $end
+$var integer 32 B i [31:0] $end
+$upscope $end
+$scope module pc0 $end
+$var wire 1 ! clk $end
+$var wire 8 C next_pc [7:0] $end
+$var wire 1 " rst $end
+$var reg 8 D pc [7:0] $end
+$upscope $end
+$scope module rf $end
+$var wire 1 ! clk $end
+$var wire 4 E rd [3:0] $end
+$var wire 16 F rd_data [15:0] $end
+$var wire 1 ) reg_write $end
+$var wire 4 G rs1 [3:0] $end
+$var wire 16 H rs1_data [15:0] $end
+$var wire 4 I rs2 [3:0] $end
+$var wire 16 J rs2_data [15:0] $end
+$var wire 1 " rst $end
+$var integer 32 K i [31:0] $end
+$upscope $end
+$upscope $end
+$upscope $end
+$enddefinitions $end
+$comment Show the parameter values. $end
+$dumpall
+$end
+#0
+$dumpvars
+b10000 K
+b0 J
+b0 I
+b0 H
+b0 G
+b110 F
+b1 E
+b0 D
+b1 C
+b100000000 B
+b0 A
+b110000100000110 @
+b100000000 ?
+b0 >
+b0 =
+b110 <
+b0 ;
+b110 :
+b110 9
+b0 8
+b0 7
+b110 6
+b110 5
+b0 4
+b110 3
+12
+b110000100000110 1
+00
+b0 /
+0.
+0-
+b1 ,
+b0 +
+b1 *
+1)
+b0 (
+b0 '
+b0 &
+b0 %
+b110 $
+0#
+1"
+0!
+$end
+#5
+b10000 K
+1!
+#10
+0!
+#15
+b1001 $
+b1001 F
+b1001 <
+b1001 3
+b1001 9
+b1001 5
+b1001 6
+b10 *
+b10 E
+b110001000001001 1
+b110001000001001 @
+b10 ,
+b10 C
+b1 +
+b1 A
+b1 D
+1!
+0"
+#20
+0!
+#25
+b1111 $
+b1111 F
+b1111 <
+b1111 3
+b1111 9
+02
+1)
+b11 *
+b11 E
+b110 (
+b110 8
+b110 H
+b1 '
+b1 G
+b0 :
+b1001 &
+b1001 =
+b1001 J
+b10 %
+b10 I
+b100100011 1
+b100100011 @
+b11 ,
+b11 C
+b10 +
+b10 A
+b10 D
+1!
+#30
+0!
+#35
+b0 $
+b0 F
+b0 <
+1#
+b0 3
+b0 9
+b0 *
+b0 E
+b0 5
+b0 6
+b0 (
+b0 8
+b0 H
+b0 '
+b0 G
+b0 &
+b0 =
+b0 J
+b0 %
+b0 I
+b0 1
+b0 @
+b100 ,
+b100 C
+b11 +
+b11 A
+b11 D
+1!
+#40
+0!
+#45
+b101 ,
+b101 C
+b100 +
+b100 A
+b100 D
+1!
+#50
+0!
+#55
+b110 ,
+b110 C
+b101 +
+b101 A
+b101 D
+1!
+#60
+0!
+#65
+b111 ,
+b111 C
+b110 +
+b110 A
+b110 D
+1!
+#70
+0!
+#75
+b1000 ,
+b1000 C
+b111 +
+b111 A
+b111 D
+1!
+#80
+0!
+#85
+b1001 ,
+b1001 C
+b1000 +
+b1000 A
+b1000 D
+1!
+#90
+0!
+#95
+b1010 ,
+b1010 C
+b1001 +
+b1001 A
+b1001 D
+1!
+#100
+0!
+#105
+b1011 ,
+b1011 C
+b1010 +
+b1010 A
+b1010 D
+1!
+#110
+0!
+#115
+b1100 ,
+b1100 C
+b1011 +
+b1011 A
+b1011 D
+1!
+#120
+0!
+#125
+b1101 ,
+b1101 C
+b1100 +
+b1100 A
+b1100 D
+1!
+#130
+0!
+#135
+b1110 ,
+b1110 C
+b1101 +
+b1101 A
+b1101 D
+1!
+#140
+0!
+#145
+b1111 ,
+b1111 C
+b1110 +
+b1110 A
+b1110 D
+1!
+#150
+0!
+#155
+b10000 ,
+b10000 C
+b1111 +
+b1111 A
+b1111 D
+1!
+#156
