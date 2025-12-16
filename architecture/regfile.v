@@ -18,13 +18,12 @@ module regfile(
         if (rst) begin
             for (i = 0; i < 16; i = i + 1)
                 regs[i] <= 16'd0;
-        end else if (reg_write && rd != 4'd0) begin
+        end else if (reg_write && rd != 0) begin
             regs[rd] <= rd_data;
         end
     end
 
-    // READ (combinational)
-    assign rs1_data = regs[rs1];
-    assign rs2_data = regs[rs2];
-
+    assign rs1_data = (rs1 == 4'd0) ? 16'd0 : regs[rs1];
+    assign rs2_data = (rs2 == 4'd0) ? 16'd0 : regs[rs2];
+    
 endmodule
