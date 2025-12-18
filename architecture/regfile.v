@@ -23,7 +23,9 @@ module regfile(
         end
     end
 
-    assign rs1_data = (rs1 == 4'd0) ? 16'd0 : regs[rs1];
-    assign rs2_data = (rs2 == 4'd0) ? 16'd0 : regs[rs2];
-    
+    wire [15:0] rs1_data_raw = (rs1==0) ? 0 : regs[rs1];
+    wire [15:0] rs2_data_raw = (rs2==0) ? 0 : regs[rs2];
+    assign rs1_data = (reg_write && (rd==rs1) && (rs1 == 4'd0)) ? rd_data : rs1_data_raw;
+    assign rs2_data = (reg_write && (rd==rs2) && (rs2 == 4'd0)) ? rd_data : rs2_data_raw;
+
 endmodule

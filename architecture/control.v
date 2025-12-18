@@ -42,8 +42,8 @@ module control (
             `OPCODE_LOAD : begin reg_write=1;  alu_src=1; mem_read=1; mem_to_reg=1; end
             `OPCODE_STORE : begin  alu_src=1; mem_write=1; end
             
-            `OPCODE_BEQ : begin branch =1 ; alu_op=`ALU_SUB; alu_src=1; reg_write = 1'b0;end 
-            `OPCODE_BNE : begin branch_ne =1 ; alu_op=`ALU_SUB; alu_src=1; reg_write = 1'b0; end
+            `OPCODE_BEQ : begin branch =1 ; alu_op=`ALU_SUB; alu_src=0; reg_write = 1'b0;end 
+            `OPCODE_BNE : begin branch_ne =1 ; alu_op=`ALU_SUB; alu_src=0; reg_write = 1'b0; end
 
             `OPCODE_HALT : pc_write =0;         
         endcase

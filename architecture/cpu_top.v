@@ -20,7 +20,7 @@ module cpu_top(
     wire[3:0] rs1 = instr[7:4];
     wire[3:0] rs2 = instr[3:0];
 
-    wire signed [15:0] imm = {{12{instr[3]}}, instr[3:0]};
+    wire signed [5:0] imm = {{12{instr[3]}}, instr[3:0]};
 
     //control signals 
     wire reg_write, alu_src;
@@ -40,22 +40,21 @@ module cpu_top(
     wire [15:0] mem_out;
     assign rd_data = mem_to_reg ? mem_out : alu_result;
     always @(*) begin
-    next_pc = pc + 16'd1;   // default
+        next_pc = pc_plus_1;  // default PC + 1
 
-    // BEQ
-    if (opcode == 4'hD && zero) begin
-        next_pc = pc + 16'd1 + imm;
+    if (branch && zero) begin
+        next_pc = $signed(pc_plus_1) + $signed(imm);
     end
-    // JUMP
-    else if (opcode == 4'h4) begin
-        next_pc = imm;
+    else if (branch_ne && !zero) begin
+        next_pc = $signed(pc_plus_1) + $signed(imm);
     end
-    end
+    // Agar JUMP instruction add karna ho toh baad mein
+end
 
 
 
     pc  u_pc(clk,rst, pc_write, next_pc, pc);
-    imem u_imem(pc, instr);
+    imem u_imem(clk,pc, instr);
     control u_ctrl (.opcode(opcode),
         .reg_write(reg_write),
         .alu_src(alu_src),
