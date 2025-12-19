@@ -19,13 +19,9 @@ module pipe_ex2_mem (
     input wire ex2_zero,
 
     // mem ops
-    output reg [15:0] mem_alu_result ,
+    output reg [15:0] mem_alu_result,
     output reg [15:0] mem_rs2_data,
-    output reg [3:0] mem_rd,
-
-    output reg mem_reg_write,
-    output reg mem_rs2_data,
-    output reg [3:0] mem_rd,
+    output reg [3:0]  mem_rd,
 
     output reg mem_reg_write,
     output reg mem_mem_read,

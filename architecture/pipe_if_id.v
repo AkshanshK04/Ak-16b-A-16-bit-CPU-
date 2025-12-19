@@ -10,7 +10,7 @@ module pipe_if_id (
     output reg [15:0] id_instr
 );
 
-    always @( posedge clk) begin
+    always @( posedge clk or posedge rst) begin
         if ( rst || flush_id) begin
             id_pc  <= 16'd0;
             id_instr <= 16'hE000;  // NOP 

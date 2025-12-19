@@ -27,25 +27,25 @@ module control (
         alu_op = `ALU_ADD;
 
         case (opcode)
-            `OPCODE_ADD : begin reg_write=1; alu_op=`ALU_ADD; end
-            `OPCODE_SUB : begin reg_write=1; alu_op=`ALU_SUB;  end
-            `OPCODE_AND : begin reg_write=1; alu_op=`ALU_AND; end
-            `OPCODE_OR  : begin reg_write=1; alu_op=`ALU_OR;  end
-            `OPCODE_XOR : begin reg_write=1; alu_op=`ALU_XOR; end
-            `OPCODE_SLT : begin reg_write=1; alu_op=`ALU_SLT;  end
+            `OP_ADD : begin reg_write=1; alu_op=`ALU_ADD; end
+            `OP_SUB : begin reg_write=1; alu_op=`ALU_SUB;  end
+            `OP_AND : begin reg_write=1; alu_op=`ALU_AND; end
+            `OP_OR  : begin reg_write=1; alu_op=`ALU_OR;  end
+            `OP_XOR : begin reg_write=1; alu_op=`ALU_XOR; end
+            `OP_SLT : begin reg_write=1; alu_op=`ALU_SLT;  end
 
-            `OPCODE_ADDI : begin reg_write=1; alu_op=`ALU_ADD; alu_src=1; end 
-            `OPCODE_ANDI : begin reg_write=1; alu_op=`ALU_AND; alu_src=1; end
-            `OPCODE_ORI : begin reg_write=1; alu_op=`ALU_OR; alu_src=1; end
-            `OPCODE_XORI : begin reg_write=1; alu_op=`ALU_XOR; alu_src=1; end
+            `OP_ADDI : begin reg_write=1; alu_op=`ALU_ADD; alu_src=1; end 
+            `OP_ANDI : begin reg_write=1; alu_op=`ALU_AND; alu_src=1; end
+            `OP_ORI : begin reg_write=1; alu_op=`ALU_OR; alu_src=1; end
+            `OP_XORI : begin reg_write=1; alu_op=`ALU_XOR; alu_src=1; end
 
-            `OPCODE_LOAD : begin reg_write=1;  alu_src=1; mem_read=1; mem_to_reg=1; end
-            `OPCODE_STORE : begin  alu_src=1; mem_write=1; end
+            `OP_LW : begin reg_write=1;  alu_src=1; mem_read=1; mem_to_reg=1; end
+            `OP_SW : begin  alu_src=1; mem_write=1; end
             
-            `OPCODE_BEQ : begin branch =1 ; alu_op=`ALU_SUB; alu_src=0; reg_write = 1'b0;end 
-            `OPCODE_BNE : begin branch_ne =1 ; alu_op=`ALU_SUB; alu_src=0; reg_write = 1'b0; end
+            `OP_BEQ : begin branch =1 ; alu_op=`ALU_SUB; alu_src=0; reg_write = 1'b0;end 
+            `OP_BNE : begin branch_ne =1 ; alu_op=`ALU_SUB; alu_src=0; reg_write = 1'b0; end
 
-            `OPCODE_HALT : pc_write =0;         
+            `OP_HALT : pc_write =0;         
         endcase
     end
 endmodule

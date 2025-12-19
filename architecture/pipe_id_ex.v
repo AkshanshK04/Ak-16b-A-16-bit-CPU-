@@ -1,7 +1,7 @@
 module pipe_id_ex(
     input wire clk,
     input wire rst,
-    input wire stall _ex,
+    input wire stall_ex,
     input wire flush_ex,
 
     //data ips from ID stage
@@ -33,10 +33,10 @@ module pipe_id_ex(
     output reg ex_mem_to_reg,
     output reg ex_branch,
     output reg ex_branch_ne,
-    output reg [3:0] ex_alu_op,
+    output reg [3:0] ex_alu_op
 );
 
-    always @(*) begin
+    always @(posedge clk or posedge rst) begin
         if( rst || flush_ex) begin
             //flushing ex stage
             ex_rs1_data <= 16'd0;

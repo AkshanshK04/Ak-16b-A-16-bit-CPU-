@@ -85,7 +85,8 @@ module cpu_top_pipeline (
     wire [15:0] ex_rs1_data , ex_rs2_data, ex_imm;
     wire [3:0] ex_rd;
     wire ex_reg_write , ex_alu_src;
-    wire ex_mem_read, ex_mem_write, ex_mem_to_reg;
+    wire ex_mem_read; 
+    wire ex_mem_write, ex_mem_to_reg;
     wire ex_branch, ex_branch_ne;
     wire [3:0] ex_alu_op;
 
@@ -97,6 +98,7 @@ module cpu_top_pipeline (
 
         .id_rs1_data(id_rs1_data),
         .id_rs2_data(id_rs2_data),
+        .id_imm(id_imm),
         .id_rd(id_rd),
 
         .id_reg_write(id_reg_write),
@@ -150,4 +152,75 @@ module cpu_top_pipeline (
         .alu_result(ex2_alu_result),
         .zero(ex2_zero)
     );
+
+    // ex-mem pipe
+    wire [15:0] mem_alu_result, mem_rs2_data;
+    wire [3:0] mem_rd;
+    wire mem_reg_write, mem_mem_read, mem_mem_write, mem_mem_to_reg;
+    wire mem_branch, mem_branch_ne, mem_zero;
+
+    pipe_ex2_mem u_ex_mem (
+        .clk(clk),
+        .rst(rst),
+        .flush_mem(branch_taken),
+
+        .ex2_alu_result(ex2_alu_result),
+        .ex2_rs2_data(ex_rs2_data),
+        .ex2_rd(ex_rd),
+        .ex2_reg_write(ex_reg_write),
+        .ex2_mem_read(ex_mem_read),
+        .ex2_mem_write(ex_mem_write),
+        .ex2_mem_to_reg(ex_mem_to_reg),
+        .ex2_branch(ex_branch),
+        .ex2_branch_ne(ex_branch_ne),
+        .ex2_zero(ex2_zero),
+
+        .mem_alu_result(mem_alu_result),
+        .mem_rs2_data(mem_rs2_data),
+        .mem_rd(mem_rd),
+        .mem_reg_write(mem_reg_write),
+        .mem_mem_read(mem_mem_read),
+        .mem_mem_write(mem_mem_write),
+        .mem_mem_to_reg(mem_mem_to_reg),
+        .mem_branch(mem_branch),
+        .mem_branch_ne(mem_branch_ne),
+        .mem_zero(mem_zero)
+    );
+
+    // mem stage
+    wire [15:0] mem_read_data;
+    dmem u_dmem (
+        .clk(clk),
+        .addr(mem_alu_result),
+        .wdata(mem_rs2_data),
+        .mem_write(mem_mem_write),
+        .mem_read(mem_mem_read),
+        .rdata(mem_read_data)
+    );
+
+    // mem-wb pipe
+    wire [15:0] wb_alu_result, wb_read_data ;
+    wire wb_mem_to_reg ;
+    
+    pipe_mem_wb u_mem_wb (
+        .clk(clk),
+        .rst(rst),
+        .mem_alu_result(mem_alu_result),
+        .mem_read_data(mem_read_data),
+        .mem_rd(mem_rd),
+        .mem_reg_write(mem_reg_write),
+        .mem_mem_to_reg(mem_mem_to_reg),
+        .wb_alu_result(wb_alu_result),
+        .wb_read_data(wb_read_data),
+        .wb_rd(wb_rd),
+        .wb_reg_write(wb_reg_write),
+        .wb_mem_to_reg(wb_mem_to_reg)
+    );
+
+    // wb stage
+    assign wb_data = wb_mem_to_reg ? wb_read_data : wb_alu_result;
+
+    // branch decision
+    assign branch_taken = (mem_branch && mem_zero) || (mem_branch_ne && !mem_zero);
+    assign branch_target = mem_alu_result; //
 endmodule

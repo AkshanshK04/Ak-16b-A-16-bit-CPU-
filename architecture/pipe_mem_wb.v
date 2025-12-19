@@ -7,7 +7,7 @@ module pipe_mem_wb(
     //ips from mem stage
     input wire [15:0] mem_alu_result,
     input wire [15:0] mem_read_data,
-    input wire [15:0] mem_rd,
+    input wire [3:0] mem_rd,
 
     input wire mem_reg_write,
     input wire mem_mem_to_reg,
