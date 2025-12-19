@@ -3,6 +3,7 @@
 module pipe_mem_wb(
     input wire clk,
     input wire rst,
+    input wire flush_wb,
 
     //ips from mem stage
     input wire [15:0] mem_alu_result,
@@ -22,7 +23,7 @@ module pipe_mem_wb(
 );
 
     always @(posedge clk or posedge rst ) begin
-        if (rst) begin
+        if (rst || flush_wb) begin
             wb_alu_result <= 16'd0;
             wb_read_data <= 16'd0;
             wb_rd <= 4'd0;

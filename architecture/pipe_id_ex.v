@@ -4,11 +4,15 @@ module pipe_id_ex(
     input wire stall_ex,
     input wire flush_ex,
 
+    input wire [15:0] id_pc,
+
     //data ips from ID stage
     input wire [15:0] id_rs1_data,
     input wire [15:0] id_rs2_data,
     input wire [15:0] id_imm,
     input wire[3:0] id_rd,
+    input wire [3:0] id_rs1,
+    input wire [3:0] id_rs2,
 
     // control signals from id stage
     input wire id_reg_write,
@@ -20,11 +24,15 @@ module pipe_id_ex(
     input wire id_branch_ne,
     input wire [3:0] id_alu_op,
 
+    output reg [15:0] ex_pc,
+
     //outputs to ex stage
     output reg [15:0] ex_rs1_data,
     output reg [15:0] ex_rs2_data,
     output reg [15:0] ex_imm,
     output reg [3:0] ex_rd,
+    output reg [3:0] ex_rs1,
+    output reg [3:0] ex_rs2,
 
     output reg ex_reg_write,
     output reg ex_alu_src,
@@ -43,6 +51,9 @@ module pipe_id_ex(
             ex_rs2_data <= 16'd0;
             ex_imm <= 16'd0;
             ex_rd <= 4'b0;
+            ex_pc <= 16'd0;
+            ex_rs1 <= 4'd0;
+            ex_rs2 <= 4'd0;
 
             ex_reg_write <= 1'b0;
             ex_alu_src <= 1'b0;
@@ -59,6 +70,9 @@ module pipe_id_ex(
             ex_rs2_data <= id_rs2_data;
             ex_imm <= id_imm;
             ex_rd <= id_rd;
+            ex_pc <= id_pc;
+            ex_rs1 <= id_rs1;
+            ex_rs2 <= id_rs2;
 
             ex_reg_write <= id_reg_write;
             ex_alu_src <= id_alu_src;

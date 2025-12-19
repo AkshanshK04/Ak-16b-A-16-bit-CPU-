@@ -4,6 +4,10 @@ module pipe_ex2_mem (
     input wire clk,
     input wire rst,
     input wire flush_mem,
+    input wire stall_mem,
+
+    input wire [15:0] ex2_branch_target,
+    output reg [15:0] mem_branch_target,
     
     // ex2 ips
     input wire [15:0] ex2_alu_result,
@@ -33,10 +37,11 @@ module pipe_ex2_mem (
 );
 
     always @(posedge clk or posedge rst ) begin
-        if (rst || flush_mem) begin
+        if (rst) begin
             mem_alu_result <= 16'd0;
             mem_rs2_data <= 16'd0;
             mem_rd <= 4'd0;
+            mem_branch_target <= 16'd0;
  
             mem_reg_write <= 1'b0;
             mem_mem_read <= 1'b0;
@@ -46,10 +51,27 @@ module pipe_ex2_mem (
             mem_branch_ne <= 1'b0;
             mem_zero <= 1'b0;
         end
-        else begin
+        else if (flush_mem) begin
+            //flush on branch le liya
+            mem_alu_result <= 16'd0;
+            mem_rs2_data <= 16'd0;
+            mem_rd <= 4'd0;
+            mem_branch_target <= 16'd0;
+
+            mem_reg_write <= 1'b0;
+            mem_mem_read <= 1'b0;
+            mem_mem_write <= 1'b0;
+            mem_branch <= 1'b0;
+            mem_branch_ne <= 1'b0;
+            mem_zero <= 1'b0;
+        
+        end
+        else if (!stall_mem) begin
+            // normal transfer bw ex2-mem
             mem_alu_result <= ex2_alu_result;
             mem_rs2_data <= ex2_rs2_data;
             mem_rd <= ex2_rd;
+            mem_branch_target <= ex2_branch_target;
 
             mem_reg_write <= ex2_reg_write;
             mem_mem_read <= ex2_mem_read;

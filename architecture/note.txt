@@ -1,0 +1,17 @@
+alu
+if_stage
+id_stage
+pipe_if_id
+ex1stage
+ex2stage
+pipe_id_ex
+forwarding unit
+pipe_ex2_mem
+control
+defopcode
+dmem
+imem
+pc
+regfile
+pipe_mem_wb
+cputoppipeline

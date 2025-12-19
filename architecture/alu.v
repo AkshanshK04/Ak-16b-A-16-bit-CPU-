@@ -10,6 +10,8 @@ module alu(
     
 
     always @(*) begin
+        alu_result = 16'd0;
+        
         case(alu_op)
             `ALU_ADD: alu_result = a+b ;
             `ALU_SUB: alu_result = a-b;

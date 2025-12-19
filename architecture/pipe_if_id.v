@@ -11,10 +11,15 @@ module pipe_if_id (
 );
 
     always @( posedge clk or posedge rst) begin
-        if ( rst || flush_id) begin
+        if ( rst) begin
             id_pc  <= 16'd0;
-            id_instr <= 16'hE000;  // NOP 
-        end else if (!stall_id ) begin
+            id_instr <= 16'h0000;  // NOP 
+        end 
+        else if (flush_id)begin
+            id_pc <= 16'd0;
+            id_instr <= 16'h0000;
+        end
+        else if (!stall_id ) begin
             id_pc <= if_pc;
             id_instr <= if_instr;
         end

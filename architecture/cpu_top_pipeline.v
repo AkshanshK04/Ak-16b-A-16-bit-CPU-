@@ -4,18 +4,42 @@ module cpu_top_pipeline (
     input wire clk,
     input wire rst
 );
+    wire [15:0] ex_pc ;
+    wire [15:0] ex_branch_target;
+    assign ex_branch_target = ex_pc + ex_imm;
+
+    //reg for halt
+    reg halted;
 
     //if stage wiring
     wire [15:0] if_pc;
     wire [15:0] if_instr;
 
-    wire branch_taken = 1'b0;
-    wire [15:0] branch_target = 16'd0;
+    always @(posedge clk or posedge rst) begin
+        if (rst) 
+            halted <= 1'b0;
+        else if (id_opcode == `OP_HALT)
+            halted <= 1'b1;
+    end 
+
+
+    //HALT Latch
+    always @(posedge clk or posedge rst ) begin
+        if (rst)
+            halted <= 1'b0;
+        else if (id_halt)
+            halted <= 1'b1;
+    end
+
+    wire branch_taken;
+    wire [15:0] branch_target;
 
     if_stage u_if (
         .clk(clk),
         .rst(rst),
-        .stall_if(1'b0)  ,   // for hazard
+        .stall_if(halted)  ,   // for hazard
+        .flush_if(branch_taken),
+        .halt(id_halt),
         .branch_taken(branch_taken),
         .branch_target(branch_target),
         .if_pc(if_pc),
@@ -29,7 +53,7 @@ module cpu_top_pipeline (
     pipe_if_id u_if_id (
         .clk(clk),
         .rst(rst),
-        .stall_id(1'b0),
+        .stall_id(halted),
         .flush_id(branch_taken),
         .if_pc(if_pc),
         .if_instr(if_instr),
@@ -49,6 +73,7 @@ module cpu_top_pipeline (
     wire id_mem_read, id_mem_write, id_mem_to_reg;
     wire id_branch , id_branch_ne;
     wire [3:0] id_alu_op;
+    wire id_halt;
 
     control u_ctrl(
         .opcode(id_opcode),
@@ -60,7 +85,8 @@ module cpu_top_pipeline (
         .branch(id_branch),
         .branch_ne(id_branch_ne),
         .pc_write(),
-        .alu_op(id_alu_op)
+        .alu_op(id_alu_op),
+        .halt(id_halt)
     );
 
     //regfile
@@ -93,13 +119,14 @@ module cpu_top_pipeline (
     pipe_id_ex u_id_ex(
         .clk(clk),
         .rst(rst),
-        .stall_ex(1'b0),
+        .stall_ex(halted),
         .flush_ex(branch_taken),
 
         .id_rs1_data(id_rs1_data),
         .id_rs2_data(id_rs2_data),
         .id_imm(id_imm),
         .id_rd(id_rd),
+        .id_pc(id_pc),
 
         .id_reg_write(id_reg_write),
         .id_alu_src(id_alu_src),
@@ -114,6 +141,7 @@ module cpu_top_pipeline (
         .ex_rs2_data(ex_rs2_data),
         .ex_imm(ex_imm),
         .ex_rd(ex_rd),
+        .ex_pc(ex_pc),
 
         .ex_reg_write(ex_reg_write),
         .ex_alu_src(ex_alu_src),
@@ -131,10 +159,10 @@ module cpu_top_pipeline (
     ex1_stage u_ex1(
         .clk(clk),
         .rst(rst),
-        .rs1_data(ex_rs1_data),
-        .rs2_data(ex_rs2_data),
-        .imm(ex_imm),
-        .alu_src(ex_alu_src),
+        .ex_rs1_data(ex_rs1_data),
+        .ex_rs2_data(ex_rs2_data),
+        .ex_imm(ex_imm),
+        .ex_alu_src(ex_alu_src),
         .alu_in1(ex1_alu_in1),
         .alu_in2(ex1_alu_in2)
     );
@@ -158,6 +186,7 @@ module cpu_top_pipeline (
     wire [3:0] mem_rd;
     wire mem_reg_write, mem_mem_read, mem_mem_write, mem_mem_to_reg;
     wire mem_branch, mem_branch_ne, mem_zero;
+    wire [15:0] mem_branch_target;
 
     pipe_ex2_mem u_ex_mem (
         .clk(clk),
@@ -167,6 +196,8 @@ module cpu_top_pipeline (
         .ex2_alu_result(ex2_alu_result),
         .ex2_rs2_data(ex_rs2_data),
         .ex2_rd(ex_rd),
+        .ex2_branch_target(ex_branch_target),
+
         .ex2_reg_write(ex_reg_write),
         .ex2_mem_read(ex_mem_read),
         .ex2_mem_write(ex_mem_write),
@@ -178,6 +209,8 @@ module cpu_top_pipeline (
         .mem_alu_result(mem_alu_result),
         .mem_rs2_data(mem_rs2_data),
         .mem_rd(mem_rd),
+        .mem_branch_target(mem_branch_target),
+
         .mem_reg_write(mem_reg_write),
         .mem_mem_read(mem_mem_read),
         .mem_mem_write(mem_mem_write),
@@ -205,6 +238,7 @@ module cpu_top_pipeline (
     pipe_mem_wb u_mem_wb (
         .clk(clk),
         .rst(rst),
+        .flush_wb(branch_taken),
         .mem_alu_result(mem_alu_result),
         .mem_read_data(mem_read_data),
         .mem_rd(mem_rd),
@@ -222,5 +256,5 @@ module cpu_top_pipeline (
 
     // branch decision
     assign branch_taken = (mem_branch && mem_zero) || (mem_branch_ne && !mem_zero);
-    assign branch_target = mem_alu_result; //
+    assign branch_target = mem_branch_target; //
 endmodule
