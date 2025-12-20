@@ -1,8 +1,8 @@
 module pipe_if_id (
     input wire clk,
     input wire rst,
-    input wire stall_id,
-    input wire flush_id,
+    input wire stall,
+    input wire flush,
     input wire [15:0] if_pc,
     input wire [15:0] if_instr,
 
@@ -11,15 +11,11 @@ module pipe_if_id (
 );
 
     always @( posedge clk or posedge rst) begin
-        if ( rst) begin
+        if ( rst || flush) begin
             id_pc  <= 16'd0;
-            id_instr <= 16'h0000;  // NOP 
+            id_instr <= 16'hE000;  // NOP 
         end 
-        else if (flush_id)begin
-            id_pc <= 16'd0;
-            id_instr <= 16'h0000;
-        end
-        else if (!stall_id ) begin
+        else if (!stall ) begin
             id_pc <= if_pc;
             id_instr <= if_instr;
         end

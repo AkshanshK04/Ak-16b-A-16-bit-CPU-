@@ -33,15 +33,16 @@ module forwarding_unit (
 
         // mem/wb hazard
         if (memwb_reg_write && (memwb_rd != 4'd0) &&
+            (memwb_rd == idex_rs1) &&
             !(exmem_reg_write && (exmem_rd != 4'd0) &&
-            (exmem_rd == idex_rs1)) &&
-            (memwb_rd == idex_rs1))
+            (exmem_rd == idex_rs1)))
             forward_a = 2'b01;
         
         if (memwb_reg_write && (memwb_rd != 4'd0) &&
+             (memwb_rd == idex_rs2) &&
             !(exmem_reg_write && (exmem_rd != 4'd0) &&
             (exmem_rd == idex_rs2)) &&
-            (memwb_rd == idex_rs2))
+            )
             forward_b = 2'b01;
     end
 endmodule

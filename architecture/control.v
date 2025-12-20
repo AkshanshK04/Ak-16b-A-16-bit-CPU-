@@ -2,15 +2,18 @@
 
 module control (
     input wire [3:0] opcode,
-    input wire zero,
     input wire stall,
+
     output reg reg_write ,
     output reg alu_src ,
     output reg mem_read,
     output reg mem_write,
     output reg mem_to_reg,
+
     output reg branch,
     output reg branch_ne,
+    output reg jump,
+
     output reg pc_write,
     output reg halt,
     output reg [3:0] alu_op
@@ -23,8 +26,11 @@ module control (
         mem_read=0;
         mem_write=0;
         mem_to_reg=0;
+
         branch = 0;
         branch_ne =0;
+        jump = 0;
+
         pc_write = 1;
         alu_op = `ALU_ADD;
         halt =0;
@@ -50,22 +56,24 @@ module control (
             `OP_XORI : begin reg_write=1; alu_op=`ALU_XOR; alu_src=1; end
 
             // Memory
-            `OP_LW : begin reg_write=1;  alu_src=1; mem_read=1; mem_to_reg=1; end
-            `OP_SW : begin  alu_src=1; mem_write=1; end
+            `OP_LW : begin reg_write=1;  alu_src=1; mem_read=1; mem_to_reg=1; alu_op = `ALU_ADD; end
+            `OP_SW : begin  alu_src=1; mem_write=1; alu_op = `ALU_ADD ;end
             
             `OP_BEQ : begin
-                branch =zero ? 1'b1 : 1'b0 ; 
+                branch = 1;
                 alu_op=`ALU_SUB; 
-                reg_write = 1'b0;
                 end
 
             `OP_BNE : begin 
-                branch_ne = ~zero ? 1'b1 : 1'b0 ; 
+                branch_ne = 1 ; 
                 alu_op=`ALU_SUB; 
-                reg_write = 1'b0; 
                 end
 
-            `OP_HALT : begin halt = 1'b1; end
+            `OP_JUMP : begin
+                jump = 1;
+            end
+            
+            `OP_HALT : begin halt = 1'b1 ;pc_write =0; end
             default : begin //nop
                 end
         endcase

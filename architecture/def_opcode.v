@@ -29,7 +29,7 @@
 
 //control flow
 `define OP_BEQ 4'hC
-`define OP_BNE 4'hD
+`define OP_BNE 4'D
 `define OP_JUMP 4'hE
 //4'hF is reserved for HALT
 
@@ -38,7 +38,8 @@
 `define ALU_ADD 4'b0000
 `define ALU_SUB 4'b0001
 `define ALU_AND 4'b0010
-`define ALU_OR 4'b0011
+`define ALU_OR  4'b0011
 `define ALU_XOR 4'b0100
 `define ALU_SLT 4'b0101
+
 `endif 
