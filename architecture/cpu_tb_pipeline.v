@@ -1,30 +1,36 @@
-`timescale  1ns/1ns
+`timescale 1ns/1ns
 
 module cpu_tb_pipeline;
+
     reg clk;
     reg rst;
 
+    // Instantiate CPU
     cpu_top_pipeline dut (
         .clk(clk),
         .rst(rst)
     );
 
+    // Clock generation: 10ns period
     initial begin
-        clk=0;
+        clk = 0;
         forever #5 clk = ~clk;
     end
 
-    initial begin 
+    // VCD dump
+    initial begin
         $dumpfile("cpu_pipeline.vcd");
         $dumpvars(0, cpu_tb_pipeline);
     end
 
+    // Reset
     initial begin
-        rst = 1 ;
+        rst = 1;
         #20;
-        rst =0;
+        rst = 0;
     end
 
+    // Display pipeline snapshot
     initial begin
         $display("\n=== AK-16 PIPELINE CPU SIM START ===\n");
         $monitor(
@@ -38,13 +44,14 @@ module cpu_tb_pipeline;
         );
     end
 
+    // Stop after certain cycles or on HALT
     initial begin
         #3000;
         dump_state();
         $finish;
     end
 
-    always @(posedge clk ) begin
+    always @(posedge clk) begin
         if (dut.halted && !rst) begin
             $display("\n=== HALT DETECTED ===");
             dump_state();
@@ -53,8 +60,9 @@ module cpu_tb_pipeline;
         end
     end
 
+    // Task: dump registers & memory
     task dump_state;
-        integer i ;
+        integer i;
         begin
             $display("\n=== REGISTER FILE ===");
             for (i = 0; i < 16; i = i + 1)

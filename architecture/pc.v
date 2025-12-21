@@ -11,6 +11,8 @@ module pc(
             pc_cur<= 16'd0;
         else if ( pc_en)
             pc_cur<=next_pc;
+        else
+            pc_cur <= pc_cur;
     end
 endmodule
         

@@ -5,6 +5,7 @@ module forwarding_unit (
 
     //ex/mem stage info
     input wire exmem_reg_write,
+    input wire exmem_mem_to_reg,
     input wire [3:0] exmem_rd,
 
     //mem/wb stage info
@@ -23,26 +24,28 @@ module forwarding_unit (
         forward_b = 2'b00;
 
         // ex/mem hazard (roman reigns)
-        if (exmem_reg_write && (exmem_rd != 4'd0) &&
-            (exmem_rd == idex_rs1))
+        if (exmem_reg_write && !exmem_mem_to_reg &&
+            exmem_rd != 4'd0 &&
+            exmem_rd == idex_rs1)
             forward_a = 2'b10;
         
-        if (exmem_reg_write && (exmem_rd != 4'd0) &&
-            (exmem_rd == idex_rs2))
+        if (exmem_reg_write && !exmem_mem_to_reg &&
+            exmem_rd != 4'd0 &&
+            exmem_rd == idex_rs2)
             forward_b = 2'b10;
 
         // mem/wb hazard
-        if (memwb_reg_write && (memwb_rd != 4'd0) &&
-            (memwb_rd == idex_rs1) &&
-            !(exmem_reg_write && (exmem_rd != 4'd0) &&
-            (exmem_rd == idex_rs1)))
+        if (memwb_reg_write && memwb_rd != 4'd0 &&
+            !(exmem_reg_write && !exmem_mem_to_reg && 
+            exmem_rd == idex_rs1) &&
+            memwb_rd == idex_rs1)
             forward_a = 2'b01;
-        
-        if (memwb_reg_write && (memwb_rd != 4'd0) &&
-             (memwb_rd == idex_rs2) &&
-            !(exmem_reg_write && (exmem_rd != 4'd0) &&
-            (exmem_rd == idex_rs2)) &&
-            )
+
+        if (memwb_reg_write && memwb_rd != 4'd0 &&
+            !(exmem_reg_write && !exmem_mem_to_reg && 
+            exmem_rd == idex_rs2) &&
+            memwb_rd == idex_rs2)
             forward_b = 2'b01;
+
     end
 endmodule

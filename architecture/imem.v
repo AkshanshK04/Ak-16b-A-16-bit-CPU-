@@ -1,17 +1,14 @@
-module imem(
-    input wire clk,
-    input wire [15:0] addr,    //word addressable
-    output reg [15:0] instr
-);
+`timescale 1ns/1ns
 
-    reg [15:0] mem [0:65535];  // 64K x 16-bit memory...thats too much for imem, but whatever
+module imem(
+    input wire [15:0] addr,
+    output wire [15:0] instr
+);
+    reg [15:0] mem [0:255];
+
     initial begin
         $readmemh("program.hex", mem);
     end
 
-    //Synchronous read as FPGA BRAM style
-    always @(posedge clk) begin
-        instr = mem[addr];
-    end
-
+    assign instr = mem[addr]; // continuous assignment to wire
 endmodule

@@ -1,133 +1,162 @@
 program_file = "program.hex"
+
+# ===================== Load Program =====================
 with open(program_file, "r") as f:
     lines = [line.strip() for line in f.readlines() if line.strip()]
-
 instructions = [line.zfill(4) for line in lines]
 
-reg_count = 16
-mem_count =16
-registers = [0]*reg_count
-memory = [0]*mem_count
+# ===================== Config =====================
+REG_COUNT = 16
+MEM_COUNT = 16
+STEP = 10
+NOP = "0000"
+
+registers = [0] * REG_COUNT
+memory = [0] * MEM_COUNT
 
 pipeline = {
-    "IF" : None,
-    "ID" : None,
-    "EX" : None,
-    "WB" : None
+    "IF":  {"instr": NOP},
+    "ID":  {"instr": NOP},
+    "EX":  {"instr": NOP},
+    "MEM": {"instr": NOP},
+    "WB":  {"instr": NOP},
 }
 
 pc = 0
-time =0
-Step = 10
+time = 0
+halted = False
 
-nop = "0000"
-
-def decode(instr) :
-    if instr in (nop, "xxxx", None) :
+# ===================== Helper Functions =====================
+def decode(instr):
+    if not instr or instr == NOP:
         return None, None, None, None
     op = int(instr[0], 16)
-    rd = int(instr[1],16)
-    rs1 = int(instr[2],16)
-    rs2 = int(instr[3],16)
+    rd = int(instr[1], 16)
+    rs1 = int(instr[2], 16)
+    rs2 = int(instr[3], 16)
     return op, rd, rs1, rs2
 
-def execute(op,rs1_val,rs2_val) :
-    if op == 1:
-        return (rs1_val+rs2_val) & 0xFFFF
-    elif op == 2 :
-        return (rs1_val-rs2_val) & 0xFFFF
-    elif op == 3:
+def execute(op, rs1_val, rs2_val):
+    if op == 1:      # ADD
+        return (rs1_val + rs2_val) & 0xFFFF
+    elif op == 2:    # SUB
+        return (rs1_val - rs2_val) & 0xFFFF
+    elif op == 3:    # AND
         return rs1_val & rs2_val
-    elif op ==4 :
+    elif op == 4:    # OR
         return rs1_val | rs2_val
-    elif op == 5:
-        return memory[rs2_val %mem_count]
-    elif op == 6:
-        memory[rs2_val %mem_count] = rs1_val
+    elif op == 5:    # LW
+        return memory[rs2_val % MEM_COUNT]
+    elif op == 6:    # SW
+        memory[rs2_val % MEM_COUNT] = rs1_val
         return None
-    elif op == 7:
+    elif op == 7:    # JUMP
         return rs2_val
-    else :
+    elif op == 12:   # BEQ
+        return 1 if rs1_val == rs2_val else 0
+    elif op == 13:   # BNE
+        return 1 if rs1_val != rs2_val else 0
+    elif op == 15:   # HALT
+        return None
+    else:
         return 0
 
-def hazard_stall(id_instr, ex_instr) :
-    if not id_instr or id_instr in (nop, "xxxx") :
+def hazard_stall(id_instr, ex_stage):
+    if not id_instr or id_instr == NOP:
         return False
-    if not ex_instr or ex_instr in (nop, "xxxx" ) :
+    id_op, id_rd, id_rs1, id_rs2 = decode(id_instr)
+    
+    ex_instr = ex_stage.get("instr") if isinstance(ex_stage, dict) else ex_stage
+    if not ex_instr or ex_instr == NOP:
         return False
-    _, id_rd, id_rs1, id_rs2 = decode(id_instr)
-    _, ex_rd, _, _ = decode(ex_instr if isinstance(ex_instr, str) else ex_instr.get('instr', nop))
-    if ex_rd in (id_rs1, id_rs2) and ex_rd !=0 :
+    ex_op, ex_rd, _, _ = decode(ex_instr)
+    if ex_op == 5 and ex_rd in (id_rs1, id_rs2) and ex_rd != 0:
         return True
     return False
 
-def print_snapshot(time, pc, pipeline) :
-    # EX_RD
-    if pipeline['EX'] and isinstance(pipeline['EX'], dict):
-        ex_rd = pipeline['EX']['rd'] if isinstance(pipeline['EX'], dict) else 0
-    else:
-        ex_rd = 0
+def forward_val(rs):
+    mem_stage = pipeline['MEM']
+    if mem_stage and mem_stage.get('rd') == rs and mem_stage.get('alu_res') is not None and rs != 0:
+        return mem_stage['alu_res']
+    wb_stage = pipeline['WB']
+    if wb_stage and wb_stage.get('rd') == rs and wb_stage.get('alu_res') is not None and rs != 0:
+        return wb_stage['alu_res']
+    return registers[rs]
 
-    # WB_RD
-    if pipeline['WB'] and isinstance(pipeline['WB'], dict):
-        wb_rd = pipeline['WB']['rd'] if isinstance(pipeline['WB'], dict) else 0
-    else:
-        wb_rd = 0
+def print_snapshot(time, pc):
+    ex_rd = pipeline['EX'].get('rd', 0)
+    wb_rd = pipeline['WB'].get('rd', 0)
+    wb_w  = 1 if pipeline['WB'].get('rd', 0) != 0 else 0
+    id_instr = pipeline['ID'].get('instr', NOP)
+    if_instr = pipeline['IF'].get('instr', NOP)
+    print(f"T={time:<7} | IF_PC={pc:04x} | IF_INSTR={if_instr} | ID_INSTR={id_instr} | EX_RD={ex_rd} | WB_RD={wb_rd} | WB_W={wb_w}")
 
-    # WB_W
-    wb_w = 1 if isinstance(pipeline['WB'], dict) else 0
-
-    # ID_INSTR
-    id_instr = pipeline['ID'] if pipeline['ID'] else "0000"
-    print(f"T={time :<5} | IF_PC={pc : 04x} | ID_INSTR={id_instr} | EX_RD={ex_rd} | WB_RD={wb_rd} | WB_W={wb_w}")
-
-def print_registers() :
+def print_registers():
     print("\n=== REGISTER FILE ===")
-    for i in range(reg_count) :
-        print(f"R{i} = {registers[i]:04x} ({registers[i]})")
+    for i, val in enumerate(registers):
+        print(f"R{i} = {val:04x} ({val})")
     print("\n=== DATA MEMORY [0..7] ===")
     for i in range(8):
         print(f"mem[{i}] = {memory[i]:04x}")
 
-sim_cycles = 100
-for t in range(sim_cycles) :
-    time += Step
+# ===================== Simulation Loop =====================
+while not halted:
+    time += STEP
 
-    if pipeline['WB'] and isinstance(pipeline['WB'], dict) :
-        rd = pipeline['WB']['rd']
-        val = pipeline['WB']['alu_res']
-        if rd is not None and rd!=0 and val is not None :
-            registers[rd] = val
+    # -------- WB Stage --------
+    wb_stage = pipeline['WB']
+    if wb_stage and wb_stage.get('rd', 0) != 0 and wb_stage.get('alu_res') is not None:
+        registers[wb_stage['rd']] = wb_stage['alu_res']
 
-    if pipeline['EX']  and pipeline['EX'] not in (nop, "xxxx") :
-        instr = pipeline['EX']['instr'] if isinstance(pipeline['EX'], dict) else pipeline['EX']
-        op, rd, rs1, rs2 = decode (instr)
-        if op is not None :
-            rs1_val = registers[rs1]
-            rs2_val = registers[rs2]
-            alu_res = execute(op, rs1_val, rs2_val)
-            pipeline['EX'] = {"rd" :rd, "alu_res": alu_res, "instr" : instr}
+    # -------- MEM -> WB --------
+    pipeline['WB'] = pipeline['MEM']
 
-            if op ==7 :
-                pc = alu_res
-                pipeline ['IF'] = nop
-                pipeline['ID'] = nop
+    # -------- EX Stage --------
+    ex_stage = pipeline['EX']
+    if ex_stage:
+        instr = ex_stage.get('instr', NOP)
+        op, rd, rs1, rs2 = decode(instr)
+        rs1_val = forward_val(rs1) if rs1 is not None else 0
+        rs2_val = forward_val(rs2) if rs2 is not None else 0
+        alu_res = execute(op, rs1_val, rs2_val)
+        pipeline['EX']['alu_res'] = alu_res
+        pipeline['EX']['rd'] = rd
 
-    ex_instr_str = pipeline['EX']['instr'] if isinstance(pipeline['EX'], dict) else pipeline['EX']
-    stall = hazard_stall(pipeline['ID'], ex_instr_str)
-    if not stall :
-        pipeline['WB'] = pipeline['EX']
-        pipeline['EX'] = pipeline['ID']
-        pipeline['ID'] = pipeline['IF']
-        if pc < len(instructions) :
-            pipeline['IF'] = instructions[pc]
-        else :
-            pipeline['IF'] = nop
-        pc +=1
-    else :
-        pipeline['WB'] = pipeline['EX']
-        pipeline['EX'] = {"rd" : 0, "alu_res" : 0, "instr" : nop}
+        # HALT
+        if op == 15:
+            halted = True
 
-    print_snapshot(time, pc, pipeline)
+        # JUMP / BRANCH
+        if op == 7:  # JUMP
+            pc = alu_res
+            pipeline['IF'] = {"instr": NOP}
+            pipeline['ID'] = {"instr": NOP}
+        elif op in (12, 13) and alu_res == 1:  # BEQ/BNE taken
+            pc = pc + 1
+            pipeline['IF'] = {"instr": NOP}
+            pipeline['ID'] = {"instr": NOP}
 
+    # -------- Hazard Detection --------
+    stall = hazard_stall(pipeline['ID'].get('instr'), pipeline['EX'])
+
+    # -------- IF/ID/EX Shift --------
+    if not stall:
+        pipeline['MEM'] = pipeline['EX']
+        pipeline['EX']  = pipeline['ID']
+        if pc < len(instructions):
+            pipeline['ID'] = {"instr": instructions[pc]}
+            pipeline['IF'] = {"instr": instructions[pc]}
+        else:
+            pipeline['ID'] = {"instr": NOP}
+            pipeline['IF'] = {"instr": NOP}
+        pc += 1
+    else:
+        # Stall: insert NOP in EX
+        pipeline['MEM'] = pipeline['EX']
+        pipeline['EX'] = {"instr": NOP}
+
+    # -------- Print Snapshot --------
+    print_snapshot(time, pc)
+
+# -------- Final Registers --------
 print_registers()

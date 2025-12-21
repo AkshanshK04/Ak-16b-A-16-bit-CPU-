@@ -29,7 +29,7 @@
 
 //control flow
 `define OP_BEQ 4'hC
-`define OP_BNE 4'D
+`define OP_BNE 4'hD
 `define OP_JUMP 4'hE
 //4'hF is reserved for HALT
 

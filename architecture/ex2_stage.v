@@ -1,26 +1,32 @@
 `timescale 1ns/1ns
 
 module ex2_stage(
-    input clk,
-    input rst,
-    input wire [15:0] alu_in1,
-    input wire [15:0] alu_in2,
-    input wire [3:0] alu_op,
-    output reg [15:0] alu_result,
-    output reg zero
+    input wire [15:0] alu_result_in,
+    input wire [15:0] rs2_data_in,
+    input wire [3:0] rd_in,
+
+    input wire reg_write_in,
+    input wire mem_read_in,
+    input wire mem_write_in,
+    input wire mem_to_reg_in,
+
+    output wire [15:0] alu_result_out,
+    output wire [15:0] rs2_data_out,
+    output wire [3:0] rd_out,
+
+    output wire reg_write_out,
+    output wire mem_read_out,
+    output wire mem_write_out,
+    output wire mem_to_reg_out
 );
 
-    always @(*) begin
-        case(alu_op)
-            `ALU_ADD : alu_result = alu_in1 + alu_in2;
-            `ALU_SUB : alu_result = alu_in1 - alu_in2;
-            `ALU_AND : alu_result = alu_in1 & alu_in2;
-            `ALU_OR : alu_result = alu_in1 | alu_in2 ;
-            `ALU_XOR : alu_result = alu_in1 ^ alu_in2;
-            `ALU_SLT : alu_result = ($signed(alu_in1) < $signed(alu_in2) ) ? 16'b1 : 16'b0;
-            default : alu_result = 16'b0;
-    endcase
+    assign alu_result_out = alu_result_in;
+    assign rs2_data_out = rs2_data_in;
+    assign rd_out = rd_in;
 
-    zero = (alu_result == 16'b0) ;
-    end
+    assign reg_write_out = reg_write_in;
+    assign mem_read_out = mem_read_in;
+    assign mem_write_out = mem_write_in;
+    assign mem_to_reg_out = mem_to_reg_in;
+
 endmodule

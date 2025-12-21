@@ -12,16 +12,22 @@ module dmem(
 
     initial begin
         for (i=0; i<256; i=i+1)
-                mem[i] <= 16'd0;
+                mem[i] = 16'd0;
     end
 
     always @(posedge clk ) begin
 
-         if (mem_write) 
-            mem[addr] <= write_data;
+         if (mem_write) begin
+            mem[addr[7:0]] <= write_data;
 
+        end
+    end
+
+    always @(*) begin
         if (mem_read)
-            read_data <= mem[addr]; 
+            read_data = mem[addr[7:0]];
+        else
+            read_data = 16'd0;
 
     end
 

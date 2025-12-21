@@ -1,53 +1,59 @@
 `timescale 1ns/1ns
 
 module ex1_stage(
-    input wire clk,
-    input wire rst,
+    input wire [15:0] pc_in,
 
     //from id/ex pipeline
-    input wire [15:0] ex_rs1_data,
-    input wire [15:0] ex_rs2_data,
-    input wire [15:0] ex_imm,
-    input wire ex_alu_src,      // 0=rs2, 1=imm
+    input wire [3:0] alu_op,
+    input wire [3:0] rd,
+    input wire [15:0] rs1_data,
+    input wire [15:0] rs2_data,
+    input wire [15:0] imm,
+
+    input wire alu_src,      // 0=rs2, 1=imm
 
     //forwarding unit 
-    input wire [15:0] exmem_alu_result,
-    input wire [15:0] memwb_wb_data,
-
-    //forwarding control
     input wire [1:0] forward_a,
     input wire [1:0] forward_b,
+    input wire [15:0] ex2_alu_result,
+    input wire [15:0] wb_data,
 
-    output reg [15:0] alu_in1,
-    output reg [ 15:0] alu_in2
+    output wire [15:0] alu_result,
+    output wire zero,
+    output wire [15:0] branch_target,
+    output wire [3:0] rd_out
 );
 
-    reg [15:0] src_a;
-    reg [15:0] src_b;
-    
+    assign rd_out = rd;
+    reg [15:0] op_a, op_b;
 
     //forwarding mux for rs1
     always @(*) begin
         case(forward_a)
-            2'b00 : src_a = ex_rs1_data;
-            2'b01 : src_a = memwb_wb_data;
-            2'b10 : src_a = exmem_alu_result;
-            default : src_a = ex_rs1_data;
+            2'b01 : op_a = wb_data;
+            2'b10 : op_a = ex2_alu_result;
+            default : op_a = rs1_data;
         endcase
     end
 
     //forwarding mux for rs2
     always @(*) begin
         case(forward_b) 
-            2'b00 :  src_b = ex_rs2_data;
-            2'b01 : src_b = memwb_wb_data;
-            2'b10 : src_b = exmem_alu_result;
-            default : src_b = ex_rs2_data;
+            2'b01 : op_b = wb_data;
+            2'b10 : op_b = ex2_alu_result;
+            default : op_b = rs2_data;
         endcase
     end
 
-    always @(*) begin
-        alu_in1 = src_a;
-        alu_in2 = (ex_alu_src) ? ex_imm : src_b;
-    end
+    wire [15:0] alu_b = alu_src ? imm : op_b ;
+
+    alu u_alu(
+        .a(op_a),
+        .b(alu_b),
+        .alu_op(alu_op),
+        .alu_result(alu_result),
+        .zero(zero)
+    );
+
+    assign branch_target = pc_in + imm;
 endmodule

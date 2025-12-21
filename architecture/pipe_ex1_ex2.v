@@ -12,7 +12,7 @@ module pipe_ex1_ex2 (
 );
 
     always @(posedge clk or posedge rst) begin
-        if (rs1) begin
+        if (rst) begin
             ex2_alu_out <= 16'd0;
             ex2_rs2 <= 16'd0;
             ex2_rd <= 4'd0;

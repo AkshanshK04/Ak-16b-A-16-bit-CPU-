@@ -4,7 +4,7 @@ module hazard_unit (
 
     input wire [3:0] idex_rd,
 
-    input will idex_mem_read,
+    input wire idex_mem_read,
 
     output reg pc_write,
     output reg ifid_write,
