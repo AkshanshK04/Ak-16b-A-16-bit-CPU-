@@ -1,3 +1,4 @@
+`timescale 1ns/1ns
 `include "def_opcode.v"
 
 module control (
@@ -21,59 +22,59 @@ module control (
 
     always @(*) begin
         // Default values
-        reg_write = 0;
-        alu_src = 0;
-        mem_read=0;
-        mem_write=0;
-        mem_to_reg=0;
+        reg_write = 1'b0;
+        alu_src = 1'b0;
+        mem_read=1'b0;
+        mem_write=1'b0;
+        mem_to_reg=1'b0;
 
-        branch = 0;
-        branch_ne =0;
-        jump = 0;
+        branch = 1'b0;
+        branch_ne =1'b0;
+        jump = 1'b0;
 
-        pc_write = 1;
+        pc_write = 1'b1;
         alu_op = `ALU_ADD;
-        halt =0;
+        halt =1'b0;
 
         //freeze pc if stall
         if (stall)
-            pc_write = 0;
+            pc_write = 1'b0;
 
         case (opcode)
 
             //R type
-            `OP_ADD : begin reg_write=1; alu_op=`ALU_ADD; end
-            `OP_SUB : begin reg_write=1; alu_op=`ALU_SUB;  end
-            `OP_AND : begin reg_write=1; alu_op=`ALU_AND; end
-            `OP_OR  : begin reg_write=1; alu_op=`ALU_OR;  end
-            `OP_XOR : begin reg_write=1; alu_op=`ALU_XOR; end
-            `OP_SLT : begin reg_write=1; alu_op=`ALU_SLT;  end
+            `OP_ADD : begin reg_write=1'b1; alu_op=`ALU_ADD; end
+            `OP_SUB : begin reg_write=1'b1; alu_op=`ALU_SUB;  end
+            `OP_AND : begin reg_write=1'b1; alu_op=`ALU_AND; end
+            `OP_OR  : begin reg_write=1'b1; alu_op=`ALU_OR;  end
+            `OP_XOR : begin reg_write=1'b1; alu_op=`ALU_XOR; end
+            `OP_SLT : begin reg_write=1'b1; alu_op=`ALU_SLT;  end
 
             //I type
-            `OP_ADDI : begin reg_write=1; alu_op=`ALU_ADD; alu_src=1; end 
-            `OP_ANDI : begin reg_write=1; alu_op=`ALU_AND; alu_src=1; end
-            `OP_ORI : begin reg_write=1; alu_op=`ALU_OR; alu_src=1; end
-            `OP_XORI : begin reg_write=1; alu_op=`ALU_XOR; alu_src=1; end
+            `OP_ADDI : begin reg_write=1'b1; alu_op=`ALU_ADD; alu_src=1'b1; end 
+            `OP_ANDI : begin reg_write=1'b1; alu_op=`ALU_AND; alu_src=1'b1; end
+            `OP_ORI : begin reg_write=1'b1; alu_op=`ALU_OR; alu_src=1'b1; end
+            `OP_XORI : begin reg_write=1'b1; alu_op=`ALU_XOR; alu_src=1'b1; end
 
             // Memory
-            `OP_LW : begin reg_write=1;  alu_src=1; mem_read=1; mem_to_reg=1; alu_op = `ALU_ADD; end
-            `OP_SW : begin  alu_src=1; mem_write=1; alu_op = `ALU_ADD ;end
+            `OP_LW : begin reg_write=1'b1;  alu_src=1'b1; mem_read=1'b1; mem_to_reg=1'b1; alu_op = `ALU_ADD; end
+            `OP_SW : begin  alu_src=1'b1; mem_write=1'b1; alu_op = `ALU_ADD ;end
             
             `OP_BEQ : begin
-                branch = 1;
+                branch = 1'b1;
                 alu_op=`ALU_SUB; 
                 end
 
             `OP_BNE : begin 
-                branch_ne = 1 ; 
+                branch_ne = 1'b1 ; 
                 alu_op=`ALU_SUB; 
                 end
 
             `OP_JUMP : begin
-                jump = 1;
+                jump = 1'b1;
             end
             
-            `OP_HALT : begin halt = 1'b1 ;pc_write =0; end
+            `OP_HALT : begin halt = 1'b1 ;pc_write =1'b0; end
             default : begin //nop
                 end
         endcase

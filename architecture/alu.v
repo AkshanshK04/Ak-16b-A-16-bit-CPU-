@@ -1,3 +1,4 @@
+`timescale 1ns/1ns
 `include "def_opcode.v"
 
 module alu(

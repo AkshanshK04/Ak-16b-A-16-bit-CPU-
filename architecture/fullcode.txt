@@ -1,46 +1,46 @@
-//alu.v
 `include "def_opcode.v"
 
 module alu(
-    input [15:0] a, b,
-    input [3:0] alu_op,
+    input wire [15:0] a, b,
+    input wire [3:0] alu_op,
     output reg [15:0] alu_result,
-    output zero
+    output  wire zero
 );
 
     
 
     always @(*) begin
-        alu_result = 16'd0;
-        
-        case(alu_op)
-            `ALU_ADD: alu_result = a+b ;
-            `ALU_SUB: alu_result = a-b;
-            `ALU_AND: alu_result = a&b;
-            `ALU_OR: alu_result= a |b;
-            `ALU_XOR: alu_result = a ^b;
-            `ALU_SLT: alu_result = ($signed(a) < $signed(b) ) ? 16'd1 : 16'd0;
-            default: alu_result = 16'd0;
-        endcase
-    end
+    case (alu_op)
+        `ALU_ADD: alu_result = a + b;
+        `ALU_SUB: alu_result = a - b;
+        `ALU_AND: alu_result = a & b;
+        `ALU_OR : alu_result = a | b;
+        `ALU_XOR: alu_result = a ^ b;
+        `ALU_SLT: alu_result = ($signed(a) < $signed(b)) ? 16'd1 : 16'd0;
+        default : alu_result = 16'd0;
+    endcase
+end
 
-    assign zero = (alu_result == 16'b0);
+
+    assign zero = (alu_result == 16'd0);
 endmodule
 
-//control.v
 `include "def_opcode.v"
 
 module control (
     input wire [3:0] opcode,
-    input wire zero,
     input wire stall,
+
     output reg reg_write ,
     output reg alu_src ,
     output reg mem_read,
     output reg mem_write,
     output reg mem_to_reg,
+
     output reg branch,
     output reg branch_ne,
+    output reg jump,
+
     output reg pc_write,
     output reg halt,
     output reg [3:0] alu_op
@@ -53,8 +53,11 @@ module control (
         mem_read=0;
         mem_write=0;
         mem_to_reg=0;
+
         branch = 0;
         branch_ne =0;
+        jump = 0;
+
         pc_write = 1;
         alu_op = `ALU_ADD;
         halt =0;
@@ -80,56 +83,63 @@ module control (
             `OP_XORI : begin reg_write=1; alu_op=`ALU_XOR; alu_src=1; end
 
             // Memory
-            `OP_LW : begin reg_write=1;  alu_src=1; mem_read=1; mem_to_reg=1; end
-            `OP_SW : begin  alu_src=1; mem_write=1; end
+            `OP_LW : begin reg_write=1;  alu_src=1; mem_read=1; mem_to_reg=1; alu_op = `ALU_ADD; end
+            `OP_SW : begin  alu_src=1; mem_write=1; alu_op = `ALU_ADD ;end
             
             `OP_BEQ : begin
-                branch =zero ? 1'b1 : 1'b0 ; 
+                branch = 1;
                 alu_op=`ALU_SUB; 
-                reg_write = 1'b0;
                 end
 
             `OP_BNE : begin 
-                branch_ne = ~zero ? 1'b1 : 1'b0 ; 
+                branch_ne = 1 ; 
                 alu_op=`ALU_SUB; 
-                reg_write = 1'b0; 
                 end
 
-            `OP_HALT : begin halt = 1'b1; end
+            `OP_JUMP : begin
+                jump = 1;
+            end
+            
+            `OP_HALT : begin halt = 1'b1 ;pc_write =0; end
             default : begin //nop
                 end
         endcase
     end
 endmodule
 
-//cputbpipeline.v
-`timescale  1ns/1ns
+`timescale 1ns/1ns
 
 module cpu_tb_pipeline;
+
     reg clk;
     reg rst;
 
+    // Instantiate CPU
     cpu_top_pipeline dut (
         .clk(clk),
         .rst(rst)
     );
 
+    // Clock generation: 10ns period
     initial begin
-        clk=0;
+        clk = 0;
         forever #5 clk = ~clk;
     end
 
-    initial begin 
+    // VCD dump
+    initial begin
         $dumpfile("cpu_pipeline.vcd");
         $dumpvars(0, cpu_tb_pipeline);
     end
 
+    // Reset
     initial begin
-        rst = 1 ;
+        rst = 1;
         #20;
-        rst =0;
+        rst = 0;
     end
 
+    // Display pipeline snapshot
     initial begin
         $display("\n=== AK-16 PIPELINE CPU SIM START ===\n");
         $monitor(
@@ -143,13 +153,14 @@ module cpu_tb_pipeline;
         );
     end
 
+    // Stop after certain cycles or on HALT
     initial begin
         #3000;
         dump_state();
         $finish;
     end
 
-    always @(posedge clk ) begin
+    always @(posedge clk) begin
         if (dut.halted && !rst) begin
             $display("\n=== HALT DETECTED ===");
             dump_state();
@@ -158,8 +169,9 @@ module cpu_tb_pipeline;
         end
     end
 
+    // Task: dump registers & memory
     task dump_state;
-        integer i ;
+        integer i;
         begin
             $display("\n=== REGISTER FILE ===");
             for (i = 0; i < 16; i = i + 1)
@@ -178,86 +190,102 @@ module cpu_tb_pipeline;
 
 endmodule
 
-//cputoppipeline.v
 `timescale 1ns/1ns
+`include "def_opcode.v"
 
 module cpu_top_pipeline (
     input wire clk,
     input wire rst
 );
-    wire [15:0] ex_pc ;
-    wire [15:0] ex_branch_target;
-    assign ex_branch_target = ex_pc + ex_imm;
 
-    //reg for halt
-    reg halted;
+    // ---------------- IF stage ----------------
+    wire [15:0] if_pc, if_instr;
 
-    //if stage wiring
-    wire [15:0] if_pc;
-    wire [15:0] if_instr;
-
-    always @(posedge clk or posedge rst) begin
-        if (rst) 
-            halted <= 1'b0;
-        else if (id_opcode == `OP_HALT)
-            halted <= 1'b1;
-    end 
-
-
-    //HALT Latch
-    always @(posedge clk or posedge rst ) begin
-        if (rst)
-            halted <= 1'b0;
-        else if (id_halt)
-            halted <= 1'b1;
-    end
-
-    wire branch_taken;
-    wire [15:0] branch_target;
-
-    if_stage u_if (
-        .clk(clk),
-        .rst(rst),
-        .stall_if(halted)  ,   // for hazard
-        .flush_if(branch_taken),
-        .halt(id_halt),
-        .branch_taken(branch_taken),
-        .branch_target(branch_target),
-        .if_pc(if_pc),
-        .if_instr(if_instr)
-    );
-
-    //iF/ID pipeline regsiter
-    wire [15:0] id_pc;
-    wire [15:0] id_instr;
-
-    pipe_if_id u_if_id (
-        .clk(clk),
-        .rst(rst),
-        .stall_id(halted),
-        .flush_id(branch_taken),
-        .if_pc(if_pc),
-        .if_instr(if_instr),
-        .id_pc(id_pc),
-        .id_instr(id_instr)
-    );
-
-    //IDstage + control 
+    // ---------------- ID stage ----------------
+    wire [15:0] id_pc, id_instr;
     wire [3:0] id_opcode = id_instr[15:12];
     wire [3:0] id_rd = id_instr[11:8];
     wire [3:0] id_rs1 = id_instr[7:4];
     wire [3:0] id_rs2 = id_instr[3:0];
     wire [15:0] id_imm = {{12{id_instr[3]}}, id_instr[3:0]};
 
-    // control signals
+    wire [15:0] id_rs1_data, id_rs2_data;
     wire id_reg_write, id_alu_src;
     wire id_mem_read, id_mem_write, id_mem_to_reg;
-    wire id_branch , id_branch_ne;
+    wire id_branch, id_branch_ne, id_jump;
     wire [3:0] id_alu_op;
     wire id_halt;
 
-    control u_ctrl(
+    // ---------------- EX stage ----------------
+    wire [15:0] ex_pc, ex_rs1_data, ex_rs2_data, ex_imm;
+    wire [3:0] ex_rd;
+    wire ex_reg_write, ex_alu_src;
+    wire ex_mem_read, ex_mem_write, ex_mem_to_reg;
+    wire ex_branch, ex_branch_ne;
+    wire [3:0] ex_alu_op;
+
+    wire [15:0] ex1_alu_result;
+    wire ex1_zero;
+
+    // Forwarding signals
+    wire [1:0] forward_a, forward_b;
+
+    // ---------------- MEM stage ----------------
+    wire [15:0] mem_alu_result, mem_rs2_data, mem_branch_target;
+    wire [3:0] mem_rd;
+    wire mem_reg_write, mem_mem_read, mem_mem_write, mem_mem_to_reg;
+    wire mem_branch, mem_branch_ne, mem_zero;
+
+    // ---------------- WB stage ----------------
+    wire [15:0] wb_alu_result, wb_read_data, wb_data;
+    wire wb_mem_to_reg;
+    wire wb_reg_write;
+    wire [3:0] wb_rd;
+
+    // HALT latch
+    reg halted;
+    always @(posedge clk or posedge rst) begin
+        if (rst)
+            halted <= 1'b0;
+        else if (id_halt)
+            halted <= 1'b1;
+    end
+
+    imem u_imem(
+    .addr(if_pc),
+    .instr(if_instr)
+    );
+
+
+    // ---------------- IF Stage ----------------
+    if_stage u_if (
+        .clk(clk),
+        .rst(rst),
+        .stall_if(halted),
+        .flush_if(mem_branch || mem_branch_ne),
+        .halt(id_halt),
+        .branch_taken((mem_branch && mem_zero) || (mem_branch_ne && !mem_zero)),
+        .branch_target(mem_branch_target),
+        .if_pc(if_pc),
+        .if_instr(if_instr)
+    );
+
+    // ---------------- IF/ID Pipeline ----------------
+    pipe_if_id u_if_id (
+        .clk(clk),
+        .rst(rst),
+        .stall(stall_signal),
+        .flush(flush_signal),
+        .if_pc(if_pc),
+        .if_instr(if_instr),
+        .id_pc(id_pc),
+        .id_instr(id_instr)
+    );
+
+    // ---------------- Control ----------------
+    control u_ctrl (
         .opcode(id_opcode),
+        .stall(1'b0),
         .reg_write(id_reg_write),
         .alu_src(id_alu_src),
         .mem_read(id_mem_read),
@@ -265,18 +293,14 @@ module cpu_top_pipeline (
         .mem_to_reg(id_mem_to_reg),
         .branch(id_branch),
         .branch_ne(id_branch_ne),
+        .jump(id_jump),
         .pc_write(),
         .alu_op(id_alu_op),
         .halt(id_halt)
     );
 
-    //regfile
-    wire [15:0] id_rs1_data, id_rs2_data;
-    wire [15:0] wb_data;
-    wire wb_reg_write;
-    wire [3:0] wb_rd;
-
-    regfile u_rf(
+    // ---------------- Register File ----------------
+    regfile u_rf (
         .clk(clk),
         .rst(rst),
         .reg_write(wb_reg_write),
@@ -288,160 +312,107 @@ module cpu_top_pipeline (
         .rs2_data(id_rs2_data)
     );
 
-    //ID/EX pipeline register
-    wire [15:0] ex_rs1_data , ex_rs2_data, ex_imm;
-    wire [3:0] ex_rd;
-    wire ex_reg_write , ex_alu_src;
-    wire ex_mem_read; 
-    wire ex_mem_write, ex_mem_to_reg;
-    wire ex_branch, ex_branch_ne;
-    wire [3:0] ex_alu_op;
-
-    pipe_id_ex u_id_ex(
+    // ---------------- ID/EX Pipeline ----------------
+    pipe_id_ex u_id_ex (
         .clk(clk),
         .rst(rst),
-        .stall_ex(halted),
-        .flush_ex(branch_taken),
-
-        .id_rs1_data(id_rs1_data),
-        .id_rs2_data(id_rs2_data),
-        .id_imm(id_imm),
-        .id_rd(id_rd),
+        .flush(mem_branch || mem_branch_ne),
         .id_pc(id_pc),
-
-        .id_reg_write(id_reg_write),
-        .id_alu_src(id_alu_src),
-        .id_mem_read(id_mem_read),
-        .id_mem_write(id_mem_write),
-        .id_mem_to_reg(id_mem_to_reg),
-        .id_branch(id_branch),
-        .id_branch_ne(id_branch_ne),
-        .id_alu_op(id_alu_op),
-
-        .ex_rs1_data(ex_rs1_data),
-        .ex_rs2_data(ex_rs2_data),
-        .ex_imm(ex_imm),
-        .ex_rd(ex_rd),
+        .id_instr(id_instr),
+        .rs1_data(id_rs1_data),
+        .rs2_data(id_rs2_data),
         .ex_pc(ex_pc),
-
-        .ex_reg_write(ex_reg_write),
-        .ex_alu_src(ex_alu_src),
-        .ex_mem_read(ex_mem_read),
-        .ex_mem_write(ex_mem_write),
-        .ex_mem_to_reg(ex_mem_to_reg),
-        .ex_branch(ex_branch),
-        .ex_branch_ne(ex_branch_ne),
-        .ex_alu_op(ex_alu_op)
+        .ex_instr(),
+        .ex_rs1(ex_rs1_data),
+        .ex_rs2(ex_rs2_data)
     );
 
-    //EX-1
-    wire [15:0] ex1_alu_in1, ex1_alu_in2;
-
-    ex1_stage u_ex1(
-        .clk(clk),
-        .rst(rst),
-        .ex_rs1_data(ex_rs1_data),
-        .ex_rs2_data(ex_rs2_data),
-        .ex_imm(ex_imm),
-        .ex_alu_src(ex_alu_src),
-        .alu_in1(ex1_alu_in1),
-        .alu_in2(ex1_alu_in2)
+    // ---------------- Forwarding Unit ----------------
+    forwarding_unit u_fwd (
+        .idex_rs1(ex_rd),
+        .idex_rs2(ex_rd),
+        .exmem_reg_write(mem_reg_write),
+        .exmem_mem_to_reg(mem_mem_to_reg),
+        .exmem_rd(mem_rd),
+        .memwb_reg_write(wb_reg_write),
+        .memwb_rd(wb_rd),
+        .forward_a(forward_a),
+        .forward_b(forward_b)
     );
 
-    // EX-2
-    wire [15:0] ex2_alu_result;
-    wire ex2_zero;
-
-    ex2_stage u_ex2 (
-        .clk(clk),
-        .rst(rst),
-        .alu_in1(ex1_alu_in1),
-        .alu_in2(ex1_alu_in2),
+    // ---------------- EX1 Stage ----------------
+    ex1_stage u_ex1 (
+        .pc_in(ex_pc),
         .alu_op(ex_alu_op),
-        .alu_result(ex2_alu_result),
-        .zero(ex2_zero)
+        .rd(ex_rd),
+        .rs1_data(ex_rs1_data),
+        .rs2_data(ex_rs2_data),
+        .imm(ex_imm),
+        .alu_src(ex_alu_src),
+        .forward_a(forward_a),
+        .forward_b(forward_b),
+        .ex2_alu_result(mem_alu_result),
+        .wb_data(wb_data),
+        .alu_result(ex1_alu_result),
+        .zero(ex1_zero),
+        .branch_target(mem_branch_target),
+        .rd_out(ex_rd)
     );
 
-    // ex-mem pipe
-    wire [15:0] mem_alu_result, mem_rs2_data;
-    wire [3:0] mem_rd;
-    wire mem_reg_write, mem_mem_read, mem_mem_write, mem_mem_to_reg;
-    wire mem_branch, mem_branch_ne, mem_zero;
-    wire [15:0] mem_branch_target;
-
-    pipe_ex2_mem u_ex_mem (
-        .clk(clk),
-        .rst(rst),
-        .flush_mem(branch_taken),
-
-        .ex2_alu_result(ex2_alu_result),
-        .ex2_rs2_data(ex_rs2_data),
-        .ex2_rd(ex_rd),
-        .ex2_branch_target(ex_branch_target),
-
-        .ex2_reg_write(ex_reg_write),
-        .ex2_mem_read(ex_mem_read),
-        .ex2_mem_write(ex_mem_write),
-        .ex2_mem_to_reg(ex_mem_to_reg),
-        .ex2_branch(ex_branch),
-        .ex2_branch_ne(ex_branch_ne),
-        .ex2_zero(ex2_zero),
-
-        .mem_alu_result(mem_alu_result),
-        .mem_rs2_data(mem_rs2_data),
-        .mem_rd(mem_rd),
-        .mem_branch_target(mem_branch_target),
-
-        .mem_reg_write(mem_reg_write),
-        .mem_mem_read(mem_mem_read),
-        .mem_mem_write(mem_mem_write),
-        .mem_mem_to_reg(mem_mem_to_reg),
-        .mem_branch(mem_branch),
-        .mem_branch_ne(mem_branch_ne),
-        .mem_zero(mem_zero)
+    // ---------------- EX2 Stage ----------------
+    ex2_stage u_ex2 (
+        .alu_result_in(ex1_alu_result),
+        .rs2_data_in(ex_rs2_data),
+        .rd_in(ex_rd),
+        .reg_write_in(ex_reg_write),
+        .mem_read_in(ex_mem_read),
+        .mem_write_in(ex_mem_write),
+        .mem_to_reg_in(ex_mem_to_reg),
+        .alu_result_out(mem_alu_result),
+        .rs2_data_out(mem_rs2_data),
+        .rd_out(mem_rd),
+        .reg_write_out(mem_reg_write),
+        .mem_read_out(mem_mem_read),
+        .mem_write_out(mem_mem_write),
+        .mem_to_reg_out(mem_mem_to_reg)
     );
 
-    // mem stage
-    wire [15:0] mem_read_data;
+    // ---------------- MEM Stage ----------------
     dmem u_dmem (
         .clk(clk),
         .addr(mem_alu_result),
-        .wdata(mem_rs2_data),
+        .write_data(mem_rs2_data),
         .mem_write(mem_mem_write),
         .mem_read(mem_mem_read),
-        .rdata(mem_read_data)
+        .read_data(wb_read_data)
     );
 
-    // mem-wb pipe
-    wire [15:0] wb_alu_result, wb_read_data ;
-    wire wb_mem_to_reg ;
-    
     pipe_mem_wb u_mem_wb (
         .clk(clk),
         .rst(rst),
-        .flush_wb(branch_taken),
-        .mem_alu_result(mem_alu_result),
-        .mem_read_data(mem_read_data),
-        .mem_rd(mem_rd),
-        .mem_reg_write(mem_reg_write),
-        .mem_mem_to_reg(mem_mem_to_reg),
-        .wb_alu_result(wb_alu_result),
-        .wb_read_data(wb_read_data),
-        .wb_rd(wb_rd),
-        .wb_reg_write(wb_reg_write),
-        .wb_mem_to_reg(wb_mem_to_reg)
+        .mem_to_reg_in(mem_mem_to_reg),
+        .reg_write_in(mem_reg_write),
+        .alu_result_in(mem_alu_result),
+        .mem_data_in(wb_read_data),
+        .rd_in(mem_rd),
+        .mem_to_reg(wb_mem_to_reg),
+        .reg_write(wb_reg_write),
+        .alu_result(wb_alu_result),
+        .mem_data(wb_read_data),
+        .rd(wb_rd)
     );
 
-    // wb stage
+    // ---------------- WB Stage ----------------
     assign wb_data = wb_mem_to_reg ? wb_read_data : wb_alu_result;
 
-    // branch decision
-    assign branch_taken = (mem_branch && mem_zero) || (mem_branch_ne && !mem_zero);
-    assign branch_target = mem_branch_target; //
+    // Branch decision
+    assign mem_branch = id_branch;
+    assign mem_branch_ne = id_branch_ne;
+    assign mem_zero = ex1_zero;
+    assign mem_branch_target = ex_pc + ex_imm;
+
 endmodule
 
-
-//defopcode.v
 `ifndef AK16_OPCODE_V
 `define AK16_OPCODE_V
 //let me define opcodes for ak-16bit
@@ -482,128 +453,140 @@ endmodule
 `define ALU_ADD 4'b0000
 `define ALU_SUB 4'b0001
 `define ALU_AND 4'b0010
-`define ALU_OR 4'b0011
+`define ALU_OR  4'b0011
 `define ALU_XOR 4'b0100
 `define ALU_SLT 4'b0101
+
 `endif 
 
-//dmem.v
 module dmem(
     input wire clk,
-    input wire rst,
     input wire [15:0] addr,
-    input wire [15:0] wdata,
+    input wire [15:0] write_data,
     input wire mem_write,
     input wire mem_read,
-    output reg [15:0] rdata
+    output reg [15:0] read_data
 );
 
     reg [15:0] mem [0:255];  //256 x 16-b memory
     integer i;
 
-    always @(posedge clk or posedge rst) begin
-        if (rst) begin
-            for (i=0; i<256; i=i+1)
-                mem[i] <= 16'd0;
-            rdata <= 16'd0;
-        end
-        else begin
-            if (mem_write) 
-                mem[addr[7:0]] <= wdata;
+    initial begin
+        for (i=0; i<256; i=i+1)
+                mem[i] = 16'd0;
+    end
 
-            if (mem_read)
-                rdata <= mem[addr[7:0]];
-            else 
-                rdata <= 16'd0;
+    always @(posedge clk ) begin
+
+         if (mem_write) begin
+            mem[addr[7:0]] <= write_data;
+
         end
+    end
+
+    always @(*) begin
+        if (mem_read)
+            read_data = mem[addr[7:0]];
+        else
+            read_data = 16'd0;
+
     end
 
 endmodule
 
-//ex1stage.v
 `timescale 1ns/1ns
 
 module ex1_stage(
-    input wire clk,
-    input wire rst,
+    input wire [15:0] pc_in,
 
     //from id/ex pipeline
-    input wire [15:0] ex_rs1_data,
-    input wire [15:0] ex_rs2_data,
-    input wire [15:0] ex_imm,
-    input wire ex_alu_src,      // 0=rs2, 1=imm
+    input wire [3:0] alu_op,
+    input wire [3:0] rd,
+    input wire [15:0] rs1_data,
+    input wire [15:0] rs2_data,
+    input wire [15:0] imm,
+
+    input wire alu_src,      // 0=rs2, 1=imm
 
     //forwarding unit 
-    input wire [15:0] exmem_alu_result,
-    input wire [15:0] memwb_wb_data,
-
-    //forwarding control
     input wire [1:0] forward_a,
     input wire [1:0] forward_b,
+    input wire [15:0] ex2_alu_result,
+    input wire [15:0] wb_data,
 
-    output reg [15:0] alu_in1,
-    output reg [ 15:0] alu_in2
+    output wire [15:0] alu_result,
+    output wire zero,
+    output wire [15:0] branch_target,
+    output wire [3:0] rd_out
 );
 
-    reg [15:0] src_a;
-    reg [15:0] src_b;
-    
+    assign rd_out = rd;
+    reg [15:0] op_a, op_b;
 
     //forwarding mux for rs1
     always @(*) begin
         case(forward_a)
-            2'b00 : src_a = ex_rs1_data;
-            2'b01 : src_a = memwb_wb_data;
-            2'b10 : src_a = exmem_alu_result;
-            default : src_a = ex_rs1_data;
+            2'b01 : op_a = wb_data;
+            2'b10 : op_a = ex2_alu_result;
+            default : op_a = rs1_data;
         endcase
     end
 
     //forwarding mux for rs2
     always @(*) begin
         case(forward_b) 
-            2'b00 :  src_b = ex_rs2_data;
-            2'b01 : src_b = memwb_wb_data;
-            2'b10 : src_b = exmem_alu_result;
-            default : src_b = ex_rs2_data;
+            2'b01 : op_b = wb_data;
+            2'b10 : op_b = ex2_alu_result;
+            default : op_b = rs2_data;
         endcase
     end
 
-    always @(*) begin
-        alu_in1 = src_a;
-        alu_in2 = (ex_alu_src) ? ex_imm : src_b;
-    end
+    wire [15:0] alu_b = alu_src ? imm : op_b ;
+
+    alu u_alu(
+        .a(op_a),
+        .b(alu_b),
+        .alu_op(alu_op),
+        .alu_result(alu_result),
+        .zero(zero)
+    );
+
+    assign branch_target = pc_in + imm;
 endmodule
 
-//ex2stage.v
 `timescale 1ns/1ns
 
 module ex2_stage(
-    input clk,
-    input rst,
-    input wire [15:0] alu_in1,
-    input wire [15:0] alu_in2,
-    input wire [3:0] alu_op,
-    output reg [15:0] alu_result,
-    output reg zero
+    input wire [15:0] alu_result_in,
+    input wire [15:0] rs2_data_in,
+    input wire [3:0] rd_in,
+
+    input wire reg_write_in,
+    input wire mem_read_in,
+    input wire mem_write_in,
+    input wire mem_to_reg_in,
+
+    output wire [15:0] alu_result_out,
+    output wire [15:0] rs2_data_out,
+    output wire [3:0] rd_out,
+
+    output wire reg_write_out,
+    output wire mem_read_out,
+    output wire mem_write_out,
+    output wire mem_to_reg_out
 );
 
-    always @(*) begin
-        case(alu_op)
-            `ALU_ADD : alu_result = alu_in1 + alu_in2;
-            `ALU_SUB : alu_result = alu_in1 - alu_in2;
-            `ALU_AND : alu_result = alu_in1 & alu_in2;
-            `ALU_OR : alu_result = alu_in1 | alu_in2 ;
-            `ALU_XOR : alu_result = alu_in1 ^ alu_in2;
-            `ALU_SLT : alu_result = ($signed(alu_in1) < $signed(alu_in2) ) ? 16'b1 : 16'b0;
-            default : alu_result = 16'b0;
-    endcase
+    assign alu_result_out = alu_result_in;
+    assign rs2_data_out = rs2_data_in;
+    assign rd_out = rd_in;
 
-    zero = (alu_result == 16'b0) ;
-    end
+    assign reg_write_out = reg_write_in;
+    assign mem_read_out = mem_read_in;
+    assign mem_write_out = mem_write_in;
+    assign mem_to_reg_out = mem_to_reg_in;
+
 endmodule
 
-//forwardingunit.v
 module forwarding_unit (
     //source regs from id/ex
     input wire [3:0] idex_rs1,
@@ -611,6 +594,7 @@ module forwarding_unit (
 
     //ex/mem stage info
     input wire exmem_reg_write,
+    input wire exmem_mem_to_reg,
     input wire [3:0] exmem_rd,
 
     //mem/wb stage info
@@ -629,213 +613,164 @@ module forwarding_unit (
         forward_b = 2'b00;
 
         // ex/mem hazard (roman reigns)
-        if (exmem_reg_write && (exmem_rd != 4'd0) &&
-            (exmem_rd == idex_rs1))
+        if (exmem_reg_write && !exmem_mem_to_reg &&
+            exmem_rd != 4'd0 &&
+            exmem_rd == idex_rs1)
             forward_a = 2'b10;
         
-        if (exmem_reg_write && (exmem_rd != 4'd0) &&
-            (exmem_rd == idex_rs2))
+        if (exmem_reg_write && !exmem_mem_to_reg &&
+            exmem_rd != 4'd0 &&
+            exmem_rd == idex_rs2)
             forward_b = 2'b10;
 
         // mem/wb hazard
-        if (memwb_reg_write && (memwb_rd != 4'd0) &&
-            !(exmem_reg_write && (exmem_rd != 4'd0) &&
-            (exmem_rd == idex_rs1)) &&
-            (memwb_rd == idex_rs1))
+        if (memwb_reg_write && memwb_rd != 4'd0 &&
+            !(exmem_reg_write && !exmem_mem_to_reg && 
+            exmem_rd == idex_rs1) &&
+            memwb_rd == idex_rs1)
             forward_a = 2'b01;
-        
-        if (memwb_reg_write && (memwb_rd != 4'd0) &&
-            !(exmem_reg_write && (exmem_rd != 4'd0) &&
-            (exmem_rd == idex_rs2)) &&
-            (memwb_rd == idex_rs2))
+
+        if (memwb_reg_write && memwb_rd != 4'd0 &&
+            !(exmem_reg_write && !exmem_mem_to_reg && 
+            exmem_rd == idex_rs2) &&
+            memwb_rd == idex_rs2)
             forward_b = 2'b01;
+
     end
 endmodule
 
-//idstage.v
+module hazard_unit (
+    input wire [3:0] ifid_rs1,
+    input wire [3:0] ifid_rs2,
+
+    input wire [3:0] idex_rd,
+
+    input wire idex_mem_read,
+
+    output reg pc_write,
+    output reg ifid_write,
+    output reg idex_flush
+);
+
+    always @(*) begin
+        //default - koi stall nahi
+        pc_write = 1'b1;
+        ifid_write = 1'b1;
+        idex_flush = 1'b0;
+
+        if (idex_mem_read &&
+            (idex_rd != 4'd0) &&
+            ((idex_rd == ifid_rs1) ||
+            (idex_rd == ifid_rs2))) begin
+
+                //stall
+                pc_write = 1'b0;
+                ifid_write  = 1'b0;
+                idex_flush = 1'b1;
+            end
+    end
+
+endmodule
+
 `timescale 1ns/1ns
 `include "def_opcode.v"
 
 module id_stage(
     input wire clk,
     input wire rst,
-    input wire  [15:0] instr,  // instr from IF stage
 
-    input wire [15:0] wb_data,    // for write back
+    input wire  [15:0] id_instr,  // instr from IF stage
+    input wire [15:0] id_pc,
+
+    input wire [15:0] wb_rd_data,    // for write back
     input wire wb_reg_write,    // write enable from WB stage
     input wire [3:0] wb_rd,   //rd from WB stage\
 
-    output reg [3:0] opcode,
-    output reg [3:0] rd,
-    output reg [3:0] rs1,
-    output reg [3:0] rs2,
-    output reg [15:0] rs1_data,
-    output reg [15:0] rs2_data,
-    output reg [15:0] imm,
+    output wire [3:0] opcode,
+    output wire [3:0] rd,
+    output wire [3:0] rs1,
+    output wire [3:0] rs2,
+    output wire [15:0] rs1_data,
+    output wire [15:0] rs2_data,
+    output wire [15:0] imm,
+    output wire [15:0] pc_out
 
-    //control signals
-    output reg reg_write,
-    output reg alu_src,
-    output reg mem_read,
-    output reg mem_write,
-    output reg mem_to_reg,
-    output reg branch,
-    output reg branch_ne,
-    output reg halt,
-    output reg [3:0] alu_op
 );
 
-    reg [15:0] regfile [0:15] ;
-
-    integer i;
-    always @( posedge clk or posedge rst ) begin
-        if (rst) begin
-            for (i=0; i<16; i=i+1)
-                regfile[i] <= 16'b0;
-        end
-        else if (wb_reg_write && wb_rd != 4'd0) begin
-            regfile[wb_rd] <= wb_data;   // write-back stage
-        end
-    end
     
     // decoding instruction
-    always @(*) begin
-        opcode = instr[15:12];
-        rd = instr[11:8];
-        rs1 = instr[7:4];
-        rs2 = instr[3:0];
-        imm = {{12{instr[3]}}, instr[3:0]}; // simple 4bit imm
+    assign opcode = id_instr[15:12];
+    assign rd = id_instr[11:8];
+    assign rs1 = id_instr[7:4];
+    assign rs2 = id_instr[3:0];
+    assign imm = {{12{id_instr[3]}}, id_instr[3:0]}; // simple 4bit imm
 
-        rs1_data = (rs1 == 4'd0) ? 16'd0 : regfile[rs1];
-        rs2_data = (rs2 == 4'd0) ? 16'd0 : regfile[rs2];
+    assign pc_out = id_pc;
+    
+    regfile u_regfile (
+        .clk(clk),
+        .rst(rst),
+        .reg_write(wb_reg_write),
+        .rs1(rs1),
+        .rs2(rs2),
+        .rd(wb_rd),
+        .rd_data(wb_rd_data),
+        .rs1_data(rs1_data),
+        .rs2_data(rs2_data)
 
-        //default control signals bolte
-        reg_write = 0;
-        alu_src = 1'b0;
-        mem_read = 1'b0;
-        mem_write = 1'b0;
-        mem_to_reg = 1'b0;
-        branch = 1'b0;
-        branch_ne =  1'b0;
-        halt = 1'b0;
-        alu_op = `ALU_ADD;
+);
 
-        case(opcode)
-            //R-type 
-            `OP_ADD : begin reg_write = 1 ; alu_op = `ALU_ADD; end
-            `OP_SUB : begin reg_write = 1; alu_op = `ALU_SUB; end
-            `OP_AND : begin reg_write = 1 ; alu_op = `ALU_AND; end
-            `OP_OR : begin reg_write = 1; alu_op = `ALU_OR; end
-            `OP_XOR : begin reg_write = 1; alu_op = `ALU_XOR; end
-            `OP_SLT : begin reg_write = 1; alu_op = `ALU_SLT; end
-
-            //I type
-            `OP_ADDI : begin reg_write = 1; alu_src =1; alu_op = `ALU_ADD; end
-            `OP_ANDI : begin reg_write = 1; alu_src =1; alu_op = `ALU_AND; end
-            `OP_ORI : begin reg_write = 1; alu_src = 1; alu_op = `ALU_OR; end
-            `OP_XORI : begin reg_write = 1; alu_src = 1; alu_op = `ALU_XOR; end
-
-            //memory
-            `OP_LW : begin reg_write = 1; alu_src =1 ; mem_read =1 ; mem_to_reg =1 ; alu_op = `ALU_ADD; end
-            `OP_SW : begin alu_src =1 ; mem_write = 1; alu_op = `ALU_ADD; end
-
-            //branch
-            `OP_BEQ : begin branch =1; alu_op = `ALU_SUB; end
-            `OP_BNE : begin branch =1; alu_op = `ALU_SUB; end
-
-            //halt 
-            `OP_HALT : begin halt =1 ; end
-            default : begin /*eat 5 star - do nothing*/ end
-    endcase
-    end
+        
 endmodule
 
-//ifstage.v
+`timescale 1ns/1ns
+`include "def_opcode.v"
+
 module if_stage(
     input wire clk,
     input wire rst,
+    input wire stall_if,
+    input wire flush_if,
+    input wire halt,
 
-    // control from hazard
-    input wire stall_if, //PC stall hai
-    input wire flush_if,  // flush branch pe / jump 
-    input wire halt,   // halt ka instruction
-
-    //branch ka control
     input wire branch_taken,
     input wire [15:0] branch_target,
 
-    output wire [15:0] if_pc,
-    output reg [15:0] if_instr
+    output reg [15:0] if_pc,
+    output wire [15:0] if_instr
 );
 
-    wire [15:0] next_pc;
-    wire pc_en;
-
-    //pc enable logic 
-    assign pc_en = (!stall_if) && (!halt);
-    //next pc
-    assign next_pc = branch_taken ? branch_target 
-                                    : (if_pc + 16'd1);
-    pc u_pc(
-        .clk (clk),
-        .rst (rst),
-        .pc_en (pc_en),
-        .next_pc ( next_pc),
-        .pc_cur (if_pc)
+    // Instruction memory instance
+    imem u_imem (
+        .addr(if_pc),
+        .instr(if_instr)
     );
 
-    wire [15:0] imem_instr;
-    imem u_imem(
-        .clk (clk),
-        .addr (if_pc),
-        .instr (imem_instr)
-    );
-
-    //output reg -- if stage
-    always @(posedge clk or posedge rst ) begin
-        if (rst) begin
-            if_instr <= 16'hE000;   //NOP
-        end
-        else if (flush_if) begin
-            if_instr <= 16'hE000;   //i will inject NOP on branch/jmp
-        end
+    // PC update logic
+    always @(posedge clk or posedge rst) begin
+        if (rst)
+            if_pc <= 16'd0;
         else if (!stall_if && !halt) begin
-            if_instr <= imem_instr;
+            if_pc <= flush_if ? branch_target : if_pc + 16'd1;
         end
     end
-
 endmodule
 
-//imem.v
-module imem(
-    input wire clk,
-    input wire rst,
-    input wire stall,
-    input wire [15:0] addr,    //word addressable
-    output reg [15:0] instr
-);
+`timescale 1ns/1ns
 
-    reg [15:0] mem [0:65535];  // 64K x 16-bit memory...thats too much for imem, but whatever
+module imem(
+    input wire [15:0] addr,
+    output wire [15:0] instr
+);
+    reg [15:0] mem [0:255];
+
     initial begin
         $readmemh("program.hex", mem);
     end
 
-    //Synchronous read as FPGA BRAM style
-    reg [15:0] instr_next;
-    always @(*) begin
-        instr_next = mem[addr];
-    end
-
-    always @(posedge clk or posedge rst ) begin
-        if (rst) 
-            instr <= 16'd0;
-        else if (!stall)
-            instr <= instr_next;
-    end
-
+    assign instr = mem[addr]; // continuous assignment to wire
 endmodule
 
-//pc.v
 module pc(
     input wire clk,
     input wire rst,
@@ -849,26 +784,50 @@ module pc(
             pc_cur<= 16'd0;
         else if ( pc_en)
             pc_cur<=next_pc;
+        else
+            pc_cur <= pc_cur;
+    end
+endmodule
+        
+        module pipe_ex1_ex2 (
+    input wire clk,
+    input wire rst,
+
+    input wire [15:0] alu_out,
+    input wire [15:0] rs2_fwd,
+    input wire [3:0] rd,
+
+    output reg [15:0] ex2_alu_out,
+    output reg [15:0] ex2_rs2,
+    output reg [3:0] ex2_rd
+);
+
+    always @(posedge clk or posedge rst) begin
+        if (rst) begin
+            ex2_alu_out <= 16'd0;
+            ex2_rs2 <= 16'd0;
+            ex2_rd <= 4'd0;
+        end 
+        else begin
+            ex2_alu_out <= alu_out;
+            ex2_rs2 <= rs2_fwd;
+            ex2_rd <= rd;
+        end
     end
 endmodule
 
-//pipeex2mem.v
 `timescale 1ns/1ns
 
 module pipe_ex2_mem (
     input wire clk,
     input wire rst,
-    input wire flush_mem,
-    input wire stall_mem,
+    input wire flush_mem,       // flush for branch/jump
 
-    input wire [15:0] ex2_branch_target,
-    output reg [15:0] mem_branch_target,
-    
-    // ex2 ips
+    // inputs from EX2
     input wire [15:0] ex2_alu_result,
-    input wire [15:0] ex2_rs2_data,   ///store karne ke liye
-    input wire [3:0] ex2_rd,
-
+    input wire [15:0] ex2_rs2_data,
+    input wire [3:0]  ex2_rd,
+    input wire [15:0] ex2_branch_target,
     input wire ex2_reg_write,
     input wire ex2_mem_read,
     input wire ex2_mem_write,
@@ -877,11 +836,11 @@ module pipe_ex2_mem (
     input wire ex2_branch_ne,
     input wire ex2_zero,
 
-    // mem ops
+    // outputs to MEM stage
     output reg [15:0] mem_alu_result,
     output reg [15:0] mem_rs2_data,
     output reg [3:0]  mem_rd,
-
+    output reg [15:0] mem_branch_target,
     output reg mem_reg_write,
     output reg mem_mem_read,
     output reg mem_mem_write,
@@ -891,149 +850,80 @@ module pipe_ex2_mem (
     output reg mem_zero
 );
 
-    always @(posedge clk or posedge rst ) begin
-        if (rst) begin
-            mem_alu_result <= 16'd0;
-            mem_rs2_data <= 16'd0;
-            mem_rd <= 4'd0;
+    always @(posedge clk or posedge rst) begin
+        if (rst || flush_mem) begin
+            mem_alu_result    <= 16'd0;
+            mem_rs2_data      <= 16'd0;
+            mem_rd            <= 4'd0;
             mem_branch_target <= 16'd0;
- 
-            mem_reg_write <= 1'b0;
-            mem_mem_read <= 1'b0;
-            mem_mem_write <= 1'b0;
-            mem_mem_to_reg <= 1'b0;
-            mem_branch <= 1'b0;
-            mem_branch_ne <= 1'b0;
-            mem_zero <= 1'b0;
-        end
-        else if (flush_mem) begin
-            //flush on branch le liya
-            mem_alu_result <= 16'd0;
-            mem_rs2_data <= 16'd0;
-            mem_rd <= 4'd0;
-            mem_branch_target <= 16'd0;
-
-            mem_reg_write <= 1'b0;
-            mem_mem_read <= 1'b0;
-            mem_mem_write <= 1'b0;
-            mem_branch <= 1'b0;
-            mem_branch_ne <= 1'b0;
-            mem_zero <= 1'b0;
-        
-        end
-        else if (!stall_mem) begin
-            // normal transfer bw ex2-mem
-            mem_alu_result <= ex2_alu_result;
-            mem_rs2_data <= ex2_rs2_data;
-            mem_rd <= ex2_rd;
+            mem_reg_write     <= 0;
+            mem_mem_read      <= 0;
+            mem_mem_write     <= 0;
+            mem_mem_to_reg    <= 0;
+            mem_branch        <= 0;
+            mem_branch_ne     <= 0;
+            mem_zero          <= 0;
+        end else begin
+            mem_alu_result    <= ex2_alu_result;
+            mem_rs2_data      <= ex2_rs2_data;
+            mem_rd            <= ex2_rd;
             mem_branch_target <= ex2_branch_target;
-
-            mem_reg_write <= ex2_reg_write;
-            mem_mem_read <= ex2_mem_read;
-            mem_mem_write <= ex2_mem_write;
-            mem_mem_to_reg <= ex2_mem_to_reg;
-            mem_branch <= ex2_branch;
-            mem_branch_ne <= ex2_branch_ne;
-            mem_zero <= ex2_zero;
+            mem_reg_write     <= ex2_reg_write;
+            mem_mem_read      <= ex2_mem_read;
+            mem_mem_write     <= ex2_mem_write;
+            mem_mem_to_reg    <= ex2_mem_to_reg;
+            mem_branch        <= ex2_branch;
+            mem_branch_ne     <= ex2_branch_ne;
+            mem_zero          <= ex2_zero;
         end
     end
 endmodule
-        
-//pipeidex.v
+
+
 module pipe_id_ex(
     input wire clk,
     input wire rst,
-    input wire stall_ex,
-    input wire flush_ex,
-
-    input wire [15:0] id_pc,
+    input wire flush,
 
     //data ips from ID stage
-    input wire [15:0] id_rs1_data,
-    input wire [15:0] id_rs2_data,
-    input wire [15:0] id_imm,
-    input wire[3:0] id_rd,
-    input wire [3:0] id_rs1,
-    input wire [3:0] id_rs2,
-
-    // control signals from id stage
-    input wire id_reg_write,
-    input wire id_alu_src,
-    input wire id_mem_read,
-    input wire id_mem_write,
-    input wire id_mem_to_reg,
-    input wire id_branch,
-    input wire id_branch_ne,
-    input wire [3:0] id_alu_op,
-
-    output reg [15:0] ex_pc,
+    input wire [15:0] id_pc,
+    input wire [15:0] id_instr,
+    input wire [15:0] rs1_data,
+    input wire [15:0] rs2_data,
 
     //outputs to ex stage
-    output reg [15:0] ex_rs1_data,
-    output reg [15:0] ex_rs2_data,
-    output reg [15:0] ex_imm,
-    output reg [3:0] ex_rd,
-    output reg [3:0] ex_rs1,
-    output reg [3:0] ex_rs2,
-
-    output reg ex_reg_write,
-    output reg ex_alu_src,
-    output reg ex_mem_read,
-    output reg ex_mem_write,
-    output reg ex_mem_to_reg,
-    output reg ex_branch,
-    output reg ex_branch_ne,
-    output reg [3:0] ex_alu_op
+    output reg [15:0] ex_pc,
+    output reg [15:0] ex_instr,
+    output reg [15:0] ex_rs1,
+    output reg [15:0] ex_rs2
+    
 );
 
     always @(posedge clk or posedge rst) begin
-        if( rst || flush_ex) begin
+        if( rst || flush) begin
             //flushing ex stage
-            ex_rs1_data <= 16'd0;
-            ex_rs2_data <= 16'd0;
-            ex_imm <= 16'd0;
-            ex_rd <= 4'b0;
             ex_pc <= 16'd0;
-            ex_rs1 <= 4'd0;
-            ex_rs2 <= 4'd0;
+            ex_instr <= 16'hE000;
+            ex_rs1 <= 16'd0;
+            ex_rs2 <= 16'd0;
 
-            ex_reg_write <= 1'b0;
-            ex_alu_src <= 1'b0;
-            ex_mem_read <= 1'b0;
-            ex_mem_write <= 1'b0;
-            ex_mem_to_reg <= 1'b0;
-            ex_branch <= 1'b0;
-            ex_branch_ne <= 1'b0;
-            ex_alu_op <= `ALU_ADD;
         end
-        else if (!stall_ex) begin
+        else  begin
             // we will apss signals from id to ex
-            ex_rs1_data <= id_rs1_data;
-            ex_rs2_data <= id_rs2_data;
-            ex_imm <= id_imm;
-            ex_rd <= id_rd;
             ex_pc <= id_pc;
-            ex_rs1 <= id_rs1;
-            ex_rs2 <= id_rs2;
+            ex_instr <= id_instr;
+            ex_rs1 <= rs1_data;
+            ex_rs2 <= rs2_data;
 
-            ex_reg_write <= id_reg_write;
-            ex_alu_src <= id_alu_src;
-            ex_mem_read <= id_mem_read;
-            ex_mem_write <= id_mem_write;
-            ex_mem_to_reg <= id_mem_to_reg;
-            ex_branch <= id_branch;
-            ex_branch_ne <= id_branch_ne;
-            ex_alu_op <= id_alu_op;
         end
     end
 endmodule
 
-//pipeifid.v
 module pipe_if_id (
     input wire clk,
     input wire rst,
-    input wire stall_id,
-    input wire flush_id,
+    input wire stall,
+    input wire flush,
     input wire [15:0] if_pc,
     input wire [15:0] if_instr,
 
@@ -1042,15 +932,11 @@ module pipe_if_id (
 );
 
     always @( posedge clk or posedge rst) begin
-        if ( rst) begin
+        if ( rst || flush) begin
             id_pc  <= 16'd0;
-            id_instr <= 16'h0000;  // NOP 
+            id_instr <= 16'hE000;  // NOP 
         end 
-        else if (flush_id)begin
-            id_pc <= 16'd0;
-            id_instr <= 16'h0000;
-        end
-        else if (!stall_id ) begin
+        else if (!stall ) begin
             id_pc <= if_pc;
             id_instr <= if_instr;
         end
@@ -1058,52 +944,51 @@ module pipe_if_id (
 
 endmodule
 
-//pipememwb.v
 `timescale 1ns/1ns
 
 module pipe_mem_wb(
     input wire clk,
     input wire rst,
-    input wire flush_wb,
 
     //ips from mem stage
-    input wire [15:0] mem_alu_result,
-    input wire [15:0] mem_read_data,
-    input wire [3:0] mem_rd,
+    input wire mem_to_reg_in,
+    input wire reg_write_in,
 
-    input wire mem_reg_write,
-    input wire mem_mem_to_reg,
+    input wire [15:0] alu_result_in,
+    input wire [15:0] mem_data_in,
+    input wire [3:0] rd_in,
 
+    
     // ops to WB stage
-    output reg [15:0] wb_alu_result,
-    output reg [15:0] wb_read_data,
-    output reg [3:0] wb_rd,
+    output reg mem_to_reg,
+    output reg reg_write,
 
-    output reg wb_reg_write,
-    output reg wb_mem_to_reg
+    output reg [15:0] alu_result,
+    output reg [15:0] mem_data,
+    output reg [3:0] rd
+
+    
 );
 
     always @(posedge clk or posedge rst ) begin
-        if (rst || flush_wb) begin
-            wb_alu_result <= 16'd0;
-            wb_read_data <= 16'd0;
-            wb_rd <= 4'd0;
+        if (rst) begin
+           mem_to_reg <= 1'b0;
+           reg_write <= 1'b0;
+           alu_result <= 16'd0;
+           mem_data <= 16'd0;
+           rd <= 4'd0;
 
-            wb_reg_write <= 1'b0;
-            wb_mem_to_reg <= 1'b0;
         end
         else begin
-            wb_alu_result <= mem_alu_result;
-            wb_read_data <= mem_read_data;
-            wb_rd <= mem_rd;
-
-            wb_reg_write <= mem_reg_write;
-            wb_mem_to_reg <= mem_mem_to_reg;
+            mem_to_reg <= mem_to_reg_in;
+            reg_write <= reg_write_in;
+            alu_result <= alu_result_in;
+            mem_data <= mem_data_in;
+            rd <= rd_in ;
         end
     end
 endmodule 
 
-//regfile.v
 module regfile(
     input wire clk,
     input wire rst,
@@ -1129,144 +1014,202 @@ module regfile(
         end
     end
 
-    wire [15:0] rs1_raw = (rs1==4'd0) ? 16'd0 : regs[rs1];
-    wire [15:0] rs2_raw = (rs2==4'd0) ? 16'd0 : regs[rs2];
+    wire [15:0] rs1_raw; 
+    assign rs1_raw = (rs1==4'd0) ? 16'd0 : regs[rs1];
+    wire [15:0] rs2_raw; 
+    assign rs2_raw = (rs2==4'd0) ? 16'd0 : regs[rs2];
     assign rs1_data = (reg_write && (rd==rs1) && (rd != 4'd0)) ? rd_data : rs1_raw;
     assign rs2_data = (reg_write && (rd==rs2) && (rd != 4'd0)) ? rd_data : rs2_raw;
 
 endmodule
 
-//python script
+
 program_file = "program.hex"
+
+# ===================== Load Program =====================
 with open(program_file, "r") as f:
     lines = [line.strip() for line in f.readlines() if line.strip()]
-
 instructions = [line.zfill(4) for line in lines]
 
-reg_count = 16
-mem_count =16
-registers = [0]*reg_count
-memory = [0]*mem_count
+# ===================== Config =====================
+REG_COUNT = 16
+MEM_COUNT = 16
+STEP = 10
+NOP = "0000"
+
+registers = [0] * REG_COUNT
+memory = [0] * MEM_COUNT
 
 pipeline = {
-    "IF" : None,
-    "ID" : None,
-    "EX" : None,
-    "WB" : None
+    "IF":  {"instr": NOP},
+    "ID":  {"instr": NOP},
+    "EX":  {"instr": NOP},
+    "MEM": {"instr": NOP},
+    "WB":  {"instr": NOP},
 }
 
 pc = 0
-time =0
-Step = 10
+time = 0
+halted = False
+branch_taken = False
+jump_taken = False
 
-nop = "0000"
-
-def decode(instr) :
-    if instr in (nop, "xxxx", None) :
+# ===================== Helper Functions =====================
+def decode(instr):
+    if not instr or instr == NOP:
         return None, None, None, None
     op = int(instr[0], 16)
-    rd = int(instr[1],16)
-    rs1 = int(instr[2],16)
-    rs2 = int(instr[3],16)
+    rd = int(instr[1], 16)
+    rs1 = int(instr[2], 16)
+    rs2 = int(instr[3], 16)
     return op, rd, rs1, rs2
 
-def execute(op,rs1_val,rs2_val) :
-    if op == 1:
-        return (rs1_val+rs2_val) & 0xFFFF
-    elif op == 2 :
-        return (rs1_val-rs2_val) & 0xFFFF
-    elif op == 3:
+def execute(op, rs1_val, rs2_val):
+    if op == 1:      # ADD
+        return (rs1_val + rs2_val) & 0xFFFF
+    elif op == 2:    # SUB
+        return (rs1_val - rs2_val) & 0xFFFF
+    elif op == 3:    # AND
         return rs1_val & rs2_val
-    elif op ==4 :
+    elif op == 4:    # OR
         return rs1_val | rs2_val
-    elif op == 5:
-        return memory[rs2_val %mem_count]
-    elif op == 6:
-        memory[rs2_val %mem_count] = rs1_val
+    elif op == 5:    # LW
+        return memory[rs2_val % MEM_COUNT]
+    elif op == 6:    # SW
+        memory[rs2_val % MEM_COUNT] = rs1_val
         return None
-    elif op == 7:
+    elif op == 7:    # JUMP
         return rs2_val
-    else :
+    elif op == 12:   # BEQ
+        return 1 if rs1_val == rs2_val else 0
+    elif op == 13:   # BNE
+        return 1 if rs1_val != rs2_val else 0
+    elif op == 15:   # HALT
+        return None
+    else:
         return 0
 
-def hazard_stall(id_instr, ex_instr) :
-    if not id_instr or id_instr in (nop, "xxxx") :
+def hazard_stall(id_instr, ex_stage):
+    if not id_instr or id_instr == NOP:
         return False
-    if not ex_instr or ex_instr in (nop, "xxxx" ) :
+    id_op, id_rd, id_rs1, id_rs2 = decode(id_instr)
+    
+    ex_instr = ex_stage.get("instr") if isinstance(ex_stage, dict) else ex_stage
+    if not ex_instr or ex_instr == NOP:
         return False
-    _, id_rd, id_rs1, id_rs2 = decode(id_instr)
-    _, ex_rd, _, _ = decode(ex_instr if isinstance(ex_instr, str) else ex_instr.get('instr', nop))
-    if ex_rd in (id_rs1, id_rs2) and ex_rd !=0 :
+    ex_op, ex_rd, _, _ = decode(ex_instr)
+    if ex_op == 5 and ex_rd in (id_rs1, id_rs2) and ex_rd != 0:
         return True
     return False
 
-def print_snapshot(time, pc, pipeline) :
-    # EX_RD
-    if pipeline['EX'] and isinstance(pipeline['EX'], dict):
-        ex_rd = pipeline['EX']['rd'] if isinstance(pipeline['EX'], dict) else 0
-    else:
-        ex_rd = 0
+def forward_val(rs):
+    if rs is None:
+        return 0
+    # Check EX stage for forwarding
+    ex_stage = pipeline['EX']
+    if ex_stage and ex_stage.get('rd') == rs and ex_stage.get('alu_res') is not None and rs != 0:
+        return ex_stage['alu_res']
+    # Check MEM stage for forwarding
+    mem_stage = pipeline['MEM']
+    if mem_stage and mem_stage.get('rd') == rs and mem_stage.get('alu_res') is not None and rs != 0:
+        return mem_stage['alu_res']
+    # Check WB stage for forwarding
+    wb_stage = pipeline['WB']
+    if wb_stage and wb_stage.get('rd') == rs and wb_stage.get('alu_res') is not None and rs != 0:
+        return wb_stage['alu_res']
+    return registers[rs]
 
-    # WB_RD
-    if pipeline['WB'] and isinstance(pipeline['WB'], dict):
-        wb_rd = pipeline['WB']['rd'] if isinstance(pipeline['WB'], dict) else 0
-    else:
-        wb_rd = 0
+def print_snapshot(time, pc):
+    ex_rd = pipeline['EX'].get('rd', 0)
+    wb_rd = pipeline['WB'].get('rd', 0)
+    wb_w  = 1 if pipeline['WB'].get('rd', 0) != 0 and pipeline['WB'].get('alu_res') is not None else 0
+    id_instr = pipeline['ID'].get('instr', NOP)
+    if_instr = pipeline['IF'].get('instr', NOP)
+    print(f"T={time:<7} | IF_PC={pc:04x} | IF_INSTR={if_instr} | ID_INSTR={id_instr} | EX_RD={ex_rd} | WB_RD={wb_rd} | WB_W={wb_w}")
 
-    # WB_W
-    wb_w = 1 if isinstance(pipeline['WB'], dict) else 0
-
-    # ID_INSTR
-    id_instr = pipeline['ID'] if pipeline['ID'] else "0000"
-    print(f"T={time :<5} | IF_PC={pc : 04x} | ID_INSTR={id_instr} | EX_RD={ex_rd} | WB_RD={wb_rd} | WB_W={wb_w}")
-
-def print_registers() :
+def print_registers():
     print("\n=== REGISTER FILE ===")
-    for i in range(reg_count) :
-        print(f"R{i} = {registers[i]:04x} ({registers[i]})")
+    for i, val in enumerate(registers):
+        print(f"R{i} = {val:04x} ({val})")
     print("\n=== DATA MEMORY [0..7] ===")
     for i in range(8):
         print(f"mem[{i}] = {memory[i]:04x}")
 
-sim_cycles = 100
-for t in range(sim_cycles) :
-    time += Step
+# ===================== Simulation Loop =====================
+while not halted:
+    time += STEP
+    branch_taken = False
+    jump_taken = False
 
-    if pipeline['WB'] and isinstance(pipeline['WB'], dict) :
-        rd = pipeline['WB']['rd']
-        val = pipeline['WB']['alu_res']
-        if rd is not None and rd!=0 and val is not None :
-            registers[rd] = val
+    # -------- WB Stage --------
+    wb_stage = pipeline['WB']
+    if wb_stage and wb_stage.get('rd', 0) != 0 and wb_stage.get('alu_res') is not None:
+        registers[wb_stage['rd']] = wb_stage['alu_res']
 
-    if pipeline['EX']  and pipeline['EX'] not in (nop, "xxxx") :
-        instr = pipeline['EX']['instr'] if isinstance(pipeline['EX'], dict) else pipeline['EX']
-        op, rd, rs1, rs2 = decode (instr)
-        if op is not None :
-            rs1_val = registers[rs1]
-            rs2_val = registers[rs2]
+    # -------- MEM -> WB --------
+    pipeline['WB'] = pipeline['MEM'].copy() if pipeline['MEM'] else {"instr": NOP}
+
+    # -------- EX -> MEM --------
+    pipeline['MEM'] = pipeline['EX'].copy() if pipeline['EX'] else {"instr": NOP}
+
+    # -------- Hazard Detection --------
+    stall = hazard_stall(pipeline['ID'].get('instr'), pipeline['EX'])
+
+    # -------- ID -> EX (or stall) --------
+    if not stall:
+        pipeline['EX'] = pipeline['ID'].copy() if pipeline['ID'] else {"instr": NOP}
+    else:
+        # Stall: insert NOP in EX
+        pipeline['EX'] = {"instr": NOP}
+
+    # -------- EX Stage Processing --------
+    ex_stage = pipeline['EX']
+    if ex_stage:
+        instr = ex_stage.get('instr', NOP)
+        op, rd, rs1, rs2 = decode(instr)
+        if op is not None:
+            rs1_val = forward_val(rs1)
+            rs2_val = forward_val(rs2)
             alu_res = execute(op, rs1_val, rs2_val)
-            pipeline['EX'] = {"rd" :rd, "alu_res": alu_res, "instr" : instr}
+            pipeline['EX']['alu_res'] = alu_res
+            pipeline['EX']['rd'] = rd
 
-            if op ==7 :
+            # HALT
+            if op == 15:
+                halted = True
+
+            # JUMP
+            if op == 7:
                 pc = alu_res
-                pipeline ['IF'] = nop
-                pipeline['ID'] = nop
+                pipeline['IF'] = {"instr": NOP}
+                pipeline['ID'] = {"instr": NOP}
+                jump_taken = True
+            # BRANCH
+            elif op in (12, 13) and alu_res == 1:
+                # For branches, PC should already be at instruction after branch
+                # Branch offset is in rd field
+                pc = pc + rd - 1  # -1 because PC will increment later
+                pipeline['IF'] = {"instr": NOP}
+                pipeline['ID'] = {"instr": NOP}
+                branch_taken = True
 
-    ex_instr_str = pipeline['EX']['instr'] if isinstance(pipeline['EX'], dict) else pipeline['EX']
-    stall = hazard_stall(pipeline['ID'], ex_instr_str)
-    if not stall :
-        pipeline['WB'] = pipeline['EX']
-        pipeline['EX'] = pipeline['ID']
-        pipeline['ID'] = pipeline['IF']
-        if pc < len(instructions) :
-            pipeline['IF'] = instructions[pc]
-        else :
-            pipeline['IF'] = nop
-        pc +=1
-    else :
-        pipeline['WB'] = pipeline['EX']
-        pipeline['EX'] = {"rd" : 0, "alu_res" : 0, "instr" : nop}
+    # -------- IF -> ID --------
+    if not stall:
+        if pc < len(instructions):
+            pipeline['ID'] = {"instr": instructions[pc]}
+        else:
+            pipeline['ID'] = {"instr": NOP}
+        if not jump_taken and not branch_taken:
+            pc += 1
 
-    print_snapshot(time, pc, pipeline)
+    # -------- IF Stage --------
+    if pc < len(instructions):
+        pipeline['IF'] = {"instr": instructions[pc]}
+    else:
+        pipeline['IF'] = {"instr": NOP}
 
+    # -------- Print Snapshot --------
+    print_snapshot(time, pc)
+
+# -------- Final Registers --------
 print_registers()
