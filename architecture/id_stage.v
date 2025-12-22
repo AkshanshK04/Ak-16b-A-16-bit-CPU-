@@ -30,10 +30,13 @@ module id_stage(
     output wire [3:0] rs2,
     output wire [15:0] rs1_data,
     output wire [15:0] rs2_data,
-    output wire [15:0] imm,
-    output wire [15:0] pc_out
+    output wire [15:0] imm_i,
+    output wire [15:0] imm_b,
+    output wire [15:0] pc_out,
+    output wire is_nop
 );
 
+    assign is_nop = (id_instr ==  16'h0000);
     // ====== Instruction Decode ======
     // Extract fields from 16-bit instruction
     // Format: [15:12] opcode | [11:8] rd | [7:4] rs1 | [3:0] rs2/imm
@@ -45,7 +48,8 @@ module id_stage(
     // Sign-extend 4-bit immediate to 16 bits
     // If bit[3] = 1 (negative), fill upper 12 bits with 1's
     // If bit[3] = 0 (positive), fill upper 12 bits with 0's
-    assign imm = {{12{id_instr[3]}}, id_instr[3:0]};
+    assign imm_i = {{12{id_instr[3]}}, id_instr[3:0]};
+    assign imm_b = {{12{id_instr[11]}}, id_instr[11:8]};
 
     // Pass PC forward for branch target calculation
     assign pc_out = id_pc;

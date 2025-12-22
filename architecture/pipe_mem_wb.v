@@ -1,19 +1,9 @@
 `timescale 1ns/1ns
 
-// ============================================
-// MEM/WB Pipeline Register
-// ============================================
-// Pipeline register between MEM and WB stages
-// Stores all data and control signals needed by WB stage
-//
-// Features:
-// - Final pipeline register before write-back
-// - Passes ALU result and memory data
-// - Control signal determines which data to write
-
 module pipe_mem_wb(
     input wire clk,
     input wire rst,
+    input wire flush,           
 
     // Inputs from MEM stage
     input wire mem_to_reg_in,
@@ -32,20 +22,26 @@ module pipe_mem_wb(
 
     always @(posedge clk or posedge rst) begin
         if (rst) begin
-            // Reset: Clear all registers
             mem_to_reg <= 1'b0;
-            reg_write <= 1'b0;
+            reg_write  <= 1'b0;
             alu_result <= 16'd0;
-            mem_data <= 16'd0;
-            rd <= 4'd0;
+            mem_data   <= 16'd0;
+            rd         <= 4'd0;
+        end
+        else if (flush) begin
+            //  Inject NOP into WB
+            mem_to_reg <= 1'b0;
+            reg_write  <= 1'b0;
+            alu_result <= 16'd0;
+            mem_data   <= 16'd0;
+            rd         <= 4'd0;
         end
         else begin
-            // Normal operation: Latch all inputs
             mem_to_reg <= mem_to_reg_in;
-            reg_write <= reg_write_in;
+            reg_write  <= reg_write_in;
             alu_result <= alu_result_in;
-            mem_data <= mem_data_in;
-            rd <= rd_in;
+            mem_data   <= mem_data_in;
+            rd         <= rd_in;
         end
     end
 

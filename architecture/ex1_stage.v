@@ -17,7 +17,7 @@ module ex1_stage(
     input wire [1:0] forward_a,
     input wire [1:0] forward_b,
     input wire [15:0] ex2_alu_result,
-    input wire [15:0] mem_alu_result,
+    input wire [15:0] mem_wb_data,
 
     // Outputs
     output wire [15:0] alu_result,
@@ -37,7 +37,7 @@ module ex1_stage(
     always @(*) begin
         case(forward_a)
             2'b10: op_a = ex2_alu_result;   // Forward from EX2
-            2'b01: op_a = mem_alu_result;   // Forward from MEM
+            2'b01: op_a = mem_wb_data;   // Forward from MEM
             default: op_a = rs1_data;       // No forwarding
         endcase
     end
@@ -49,7 +49,7 @@ module ex1_stage(
     always @(*) begin
         case(forward_b) 
             2'b10: op_b = ex2_alu_result;   // Forward from EX2
-            2'b01: op_b = mem_alu_result;   // Forward from MEM
+            2'b01: op_b = mem_wb_data;   // Forward from MEM
             default: op_b = rs2_data;       // No forwarding
         endcase
     end

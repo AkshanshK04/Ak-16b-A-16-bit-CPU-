@@ -123,7 +123,7 @@ module cpu_top_pipeline (
 
     control u_ctrl (
         .opcode(id_opcode),
-        .stall(stall_signal),
+        .is_nop(id_instr == 16'h0000),
         .reg_write(id_reg_write),
         .alu_src(id_alu_src),
         .mem_read(id_mem_read),
@@ -132,7 +132,6 @@ module cpu_top_pipeline (
         .branch(id_branch),
         .branch_ne(id_branch_ne),
         .jump(id_jump),
-        .pc_write(id_pc_write),
         .alu_op(id_alu_op),
         .halt(id_halt)
     );

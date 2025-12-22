@@ -4,6 +4,8 @@ module cpu_tb_pipeline;
 
     reg clk;
     reg rst;
+    integer i;
+    integer drain_cycles;
 
     // Instantiate CPU
     cpu_top_pipeline dut (
@@ -11,13 +13,13 @@ module cpu_tb_pipeline;
         .rst(rst)
     );
 
-    // Clock generation: 10ns period (100MHz)
+    // Clock generation: 10ns period
     initial begin
         clk = 0;
         forever #5 clk = ~clk;
     end
 
-    // VCD dump for waveform viewing
+    // VCD dump
     initial begin
         $dumpfile("cpu_pipeline.vcd");
         $dumpvars(0, cpu_tb_pipeline);
@@ -26,12 +28,12 @@ module cpu_tb_pipeline;
     // Reset sequence
     initial begin
         rst = 1;
-        #25;  // Hold reset for 2.5 cycles
+        #25;
         rst = 0;
         $display("=== Reset released at T=%0t ===\n", $time);
     end
 
-    // Display pipeline snapshot header
+    // Pipeline header
     initial begin
         $display("\n=== AK-16 6-STAGE PIPELINE CPU SIMULATION START ===");
         $display("=== Stages: IF -> ID -> EX1 -> EX2 -> MEM -> WB ===\n");
@@ -39,7 +41,7 @@ module cpu_tb_pipeline;
         $display("--------|-------|----------|----------|--------|--------|--------|-------|-----");
     end
 
-    // Monitor pipeline state every cycle
+    // Monitor pipeline every posedge
     always @(posedge clk) begin
         if (!rst) begin
             $display("%7t | %04h  |   %04h   |   %04h   |   %1h    |   %1h    |   %1h    |  %1h    |  %b",
@@ -56,18 +58,22 @@ module cpu_tb_pipeline;
         end
     end
 
-    // Timeout after max cycles
+    // Timeout
     initial begin
-        #10000;  // 10us = 1000 cycles
+        #10000;
         $display("\n=== TIMEOUT: Maximum cycles reached ===");
         dump_state();
         $finish;
     end
 
-    // Detect HALT and finish
+    // Detect HALT and drain pipeline
     always @(posedge clk) begin
         if (dut.halted && !rst) begin
-            #20;  // Wait 2 cycles to let pipeline drain
+            drain_cycles = 4;  // Remaining pipeline stages
+            while (drain_cycles > 0) begin
+                @(posedge clk);
+                drain_cycles = drain_cycles - 1;
+            end
             $display("\n=== HALT DETECTED at T=%0t ===", $time);
             dump_state();
             $display("\n=== SIMULATION COMPLETE ===\n");
@@ -75,21 +81,20 @@ module cpu_tb_pipeline;
         end
     end
 
-    // Task: dump final state of registers & memory
+    // Task: dump processor state
     task dump_state;
-        integer i;
         begin
             $display("\n========================================");
             $display("=== FINAL PROCESSOR STATE ===");
             $display("========================================");
-            
+
             $display("\n=== REGISTER FILE ===");
             for (i = 0; i < 16; i = i + 1) begin
                 $display("R%-2d = 0x%04h (%6d) %s",
                          i,
                          dut.u_rf.regs[i],
                          $signed(dut.u_rf.regs[i]),
-                         (i == 0) ? "<- Always 0" : ""
+                         (i==0) ? "<- Always 0" : ""
                 );
             end
 
@@ -99,7 +104,7 @@ module cpu_tb_pipeline;
                 $write("mem[%2d]=0x%04h  ", i, dut.u_dmem.mem[i]);
             end
             $display("\n");
-            
+
             $display("\n=== PIPELINE STATE ===");
             $display("IF  stage: PC=0x%04h, Instr=0x%04h", dut.if_pc, dut.if_instr);
             $display("ID  stage: Instr=0x%04h", dut.id_instr);
@@ -107,7 +112,7 @@ module cpu_tb_pipeline;
             $display("EX2 stage: RD=%1h", dut.ex2_rd);
             $display("MEM stage: RD=%1h", dut.mem_rd);
             $display("WB  stage: RD=%1h, Write=%b", dut.wb_rd, dut.wb_reg_write);
-            
+
             $display("\n=== CONTROL SIGNALS ===");
             $display("Halted: %b", dut.halted);
             $display("Stall:  %b", dut.stall_signal);
