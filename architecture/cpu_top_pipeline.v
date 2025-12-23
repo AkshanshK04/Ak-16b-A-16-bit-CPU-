@@ -77,9 +77,9 @@ module cpu_top_pipeline (
     // Stall when hazard detected
     assign stall_signal = ~ifid_write_en;
     
-    // Jump detection in ID stage
+    // Jump detection in ID stage - FIXED: Use 12-bit immediate
     assign jump_taken = id_jump && !stall_signal;
-    assign jump_target = id_imm;
+    assign jump_target = {{4{id_instr[11]}}, id_instr[11:0]};  // Sign-extend 12-bit for JUMP
     
     // Branch decision in EX2 stage
     assign branch_taken = (ex2_branch && ex2_zero) || (ex2_branch_ne && !ex2_zero);

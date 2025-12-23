@@ -26,85 +26,52 @@ end
     assign zero = (alu_result == 16'd0);
 endmodule
 
-`timescale 1ns/1ns
-`include "def_opcode.v"
-
-module control (
+module control(
     input wire [3:0] opcode,
-    input wire stall,
+    input wire is_nop,
 
-    output reg reg_write ,
-    output reg alu_src ,
+    output reg reg_write,
+    output reg alu_src,
     output reg mem_read,
     output reg mem_write,
     output reg mem_to_reg,
-
     output reg branch,
     output reg branch_ne,
     output reg jump,
-
-    output reg pc_write,
     output reg halt,
     output reg [3:0] alu_op
 );
 
     always @(*) begin
-        // Default values
-        reg_write = 1'b0;
-        alu_src = 1'b0;
-        mem_read=1'b0;
-        mem_write=1'b0;
-        mem_to_reg=1'b0;
-
-        branch = 1'b0;
-        branch_ne =1'b0;
-        jump = 1'b0;
-
-        pc_write = 1'b1;
+        reg_write = 0; alu_src = 0;
+        mem_read = 0; mem_write = 0; mem_to_reg = 0;
+        branch = 0; branch_ne = 0; jump = 0;
+        halt = 0;
         alu_op = `ALU_ADD;
-        halt =1'b0;
 
-        //freeze pc if stall
-        if (stall)
-            pc_write = 1'b0;
+        if (is_nop) begin
+            // pure bubble
+        end else case (opcode)
 
-        case (opcode)
+            `OP_ADD  : begin reg_write=1; alu_op=`ALU_ADD; end
+            `OP_SUB  : begin reg_write=1; alu_op=`ALU_SUB; end
+            `OP_AND  : begin reg_write=1; alu_op=`ALU_AND; end
+            `OP_OR   : begin reg_write=1; alu_op=`ALU_OR; end
+            `OP_XOR  : begin reg_write=1; alu_op=`ALU_XOR; end
+            `OP_SLT  : begin reg_write=1; alu_op=`ALU_SLT; end
 
-            //R type
-            `OP_ADD : begin reg_write=1'b1; alu_op=`ALU_ADD; end
-            `OP_SUB : begin reg_write=1'b1; alu_op=`ALU_SUB;  end
-            `OP_AND : begin reg_write=1'b1; alu_op=`ALU_AND; end
-            `OP_OR  : begin reg_write=1'b1; alu_op=`ALU_OR;  end
-            `OP_XOR : begin reg_write=1'b1; alu_op=`ALU_XOR; end
-            `OP_SLT : begin reg_write=1'b1; alu_op=`ALU_SLT;  end
+            `OP_ADDI : begin reg_write=1; alu_src=1; end
+            `OP_ANDI : begin reg_write=1; alu_src=1; alu_op=`ALU_AND; end
+            `OP_ORI  : begin reg_write=1; alu_src=1; alu_op=`ALU_OR; end
+            `OP_XORI : begin reg_write=1; alu_src=1; alu_op=`ALU_XOR; end
 
-            //I type
-            `OP_ADDI : begin reg_write=1'b1; alu_op=`ALU_ADD; alu_src=1'b1; end 
-            `OP_ANDI : begin reg_write=1'b1; alu_op=`ALU_AND; alu_src=1'b1; end
-            `OP_ORI : begin reg_write=1'b1; alu_op=`ALU_OR; alu_src=1'b1; end
-            `OP_XORI : begin reg_write=1'b1; alu_op=`ALU_XOR; alu_src=1'b1; end
+            `OP_LW   : begin reg_write=1; alu_src=1; mem_read=1; mem_to_reg=1; end
+            `OP_SW   : begin alu_src=1; mem_write=1; end
 
-            // Memory
-            `OP_LW : begin reg_write=1'b1;  alu_src=1'b1; mem_read=1'b1; mem_to_reg=1'b1; alu_op = `ALU_ADD; end
-            `OP_SW : begin  alu_src=1'b1; mem_write=1'b1; alu_op = `ALU_ADD ;end
-            
-            `OP_BEQ : begin
-                branch = 1'b1;
-                alu_op=`ALU_SUB; 
-                end
-
-            `OP_BNE : begin 
-                branch_ne = 1'b1 ; 
-                alu_op=`ALU_SUB; 
-                end
-
-            `OP_JUMP : begin
-                jump = 1'b1;
-            end
-            
-            `OP_HALT : begin halt = 1'b1 ;pc_write =1'b0; end
-            default : begin //nop
-                end
+            `OP_BEQ  : begin branch=1; alu_op=`ALU_SUB; end
+            `OP_BNE  : begin branch_ne=1; alu_op=`ALU_SUB; end
+            `OP_JUMP : begin jump=1; end
+            `OP_HALT : begin halt=1; end
         endcase
     end
 endmodule
@@ -115,6 +82,8 @@ module cpu_tb_pipeline;
 
     reg clk;
     reg rst;
+    integer i;
+    integer drain_cycles;
 
     // Instantiate CPU
     cpu_top_pipeline dut (
@@ -122,13 +91,13 @@ module cpu_tb_pipeline;
         .rst(rst)
     );
 
-    // Clock generation: 10ns period (100MHz)
+    // Clock generation: 10ns period
     initial begin
         clk = 0;
         forever #5 clk = ~clk;
     end
 
-    // VCD dump for waveform viewing
+    // VCD dump
     initial begin
         $dumpfile("cpu_pipeline.vcd");
         $dumpvars(0, cpu_tb_pipeline);
@@ -137,12 +106,12 @@ module cpu_tb_pipeline;
     // Reset sequence
     initial begin
         rst = 1;
-        #25;  // Hold reset for 2.5 cycles
+        #25;
         rst = 0;
         $display("=== Reset released at T=%0t ===\n", $time);
     end
 
-    // Display pipeline snapshot header
+    // Pipeline header
     initial begin
         $display("\n=== AK-16 6-STAGE PIPELINE CPU SIMULATION START ===");
         $display("=== Stages: IF -> ID -> EX1 -> EX2 -> MEM -> WB ===\n");
@@ -150,7 +119,7 @@ module cpu_tb_pipeline;
         $display("--------|-------|----------|----------|--------|--------|--------|-------|-----");
     end
 
-    // Monitor pipeline state every cycle
+    // Monitor pipeline every posedge
     always @(posedge clk) begin
         if (!rst) begin
             $display("%7t | %04h  |   %04h   |   %04h   |   %1h    |   %1h    |   %1h    |  %1h    |  %b",
@@ -167,18 +136,22 @@ module cpu_tb_pipeline;
         end
     end
 
-    // Timeout after max cycles
+    // Timeout
     initial begin
-        #10000;  // 10us = 1000 cycles
+        #10000;
         $display("\n=== TIMEOUT: Maximum cycles reached ===");
         dump_state();
         $finish;
     end
 
-    // Detect HALT and finish
+    // Detect HALT and drain pipeline
     always @(posedge clk) begin
         if (dut.halted && !rst) begin
-            #20;  // Wait 2 cycles to let pipeline drain
+            drain_cycles = 4;  // Remaining pipeline stages
+            while (drain_cycles > 0) begin
+                @(posedge clk);
+                drain_cycles = drain_cycles - 1;
+            end
             $display("\n=== HALT DETECTED at T=%0t ===", $time);
             dump_state();
             $display("\n=== SIMULATION COMPLETE ===\n");
@@ -186,21 +159,20 @@ module cpu_tb_pipeline;
         end
     end
 
-    // Task: dump final state of registers & memory
+    // Task: dump processor state
     task dump_state;
-        integer i;
         begin
             $display("\n========================================");
             $display("=== FINAL PROCESSOR STATE ===");
             $display("========================================");
-            
+
             $display("\n=== REGISTER FILE ===");
             for (i = 0; i < 16; i = i + 1) begin
                 $display("R%-2d = 0x%04h (%6d) %s",
                          i,
                          dut.u_rf.regs[i],
                          $signed(dut.u_rf.regs[i]),
-                         (i == 0) ? "<- Always 0" : ""
+                         (i==0) ? "<- Always 0" : ""
                 );
             end
 
@@ -210,7 +182,7 @@ module cpu_tb_pipeline;
                 $write("mem[%2d]=0x%04h  ", i, dut.u_dmem.mem[i]);
             end
             $display("\n");
-            
+
             $display("\n=== PIPELINE STATE ===");
             $display("IF  stage: PC=0x%04h, Instr=0x%04h", dut.if_pc, dut.if_instr);
             $display("ID  stage: Instr=0x%04h", dut.id_instr);
@@ -218,7 +190,7 @@ module cpu_tb_pipeline;
             $display("EX2 stage: RD=%1h", dut.ex2_rd);
             $display("MEM stage: RD=%1h", dut.mem_rd);
             $display("WB  stage: RD=%1h, Write=%b", dut.wb_rd, dut.wb_reg_write);
-            
+
             $display("\n=== CONTROL SIGNALS ===");
             $display("Halted: %b", dut.halted);
             $display("Stall:  %b", dut.stall_signal);
@@ -354,7 +326,7 @@ module cpu_top_pipeline (
 
     control u_ctrl (
         .opcode(id_opcode),
-        .stall(stall_signal),
+        .is_nop(id_instr == 16'h0000),
         .reg_write(id_reg_write),
         .alu_src(id_alu_src),
         .mem_read(id_mem_read),
@@ -363,7 +335,6 @@ module cpu_top_pipeline (
         .branch(id_branch),
         .branch_ne(id_branch_ne),
         .jump(id_jump),
-        .pc_write(id_pc_write),
         .alu_op(id_alu_op),
         .halt(id_halt)
     );
@@ -645,7 +616,7 @@ module ex1_stage(
     input wire [1:0] forward_a,
     input wire [1:0] forward_b,
     input wire [15:0] ex2_alu_result,
-    input wire [15:0] mem_alu_result,
+    input wire [15:0] mem_wb_data,
 
     // Outputs
     output wire [15:0] alu_result,
@@ -665,7 +636,7 @@ module ex1_stage(
     always @(*) begin
         case(forward_a)
             2'b10: op_a = ex2_alu_result;   // Forward from EX2
-            2'b01: op_a = mem_alu_result;   // Forward from MEM
+            2'b01: op_a = mem_wb_data;   // Forward from MEM
             default: op_a = rs1_data;       // No forwarding
         endcase
     end
@@ -677,7 +648,7 @@ module ex1_stage(
     always @(*) begin
         case(forward_b) 
             2'b10: op_b = ex2_alu_result;   // Forward from EX2
-            2'b01: op_b = mem_alu_result;   // Forward from MEM
+            2'b01: op_b = mem_wb_data;   // Forward from MEM
             default: op_b = rs2_data;       // No forwarding
         endcase
     end
@@ -702,45 +673,56 @@ endmodule
 `timescale 1ns/1ns
 
 // ============================================
-// EX2 Stage - Passthrough Stage
+// EX2 Stage (EX/MEM Pipeline Register)
 // ============================================
-// This stage is a simple passthrough between EX1 and MEM
-// It provides an extra pipeline stage for timing optimization
-// and allows for future enhancements if needed
 
 module ex2_stage(
-    // Data inputs
+    input wire clk,
+    input wire rst,
+
+    // Inputs from EX1 stage
     input wire [15:0] alu_result_in,
     input wire [15:0] rs2_data_in,
     input wire [3:0] rd_in,
 
-    // Control inputs
     input wire reg_write_in,
     input wire mem_read_in,
     input wire mem_write_in,
     input wire mem_to_reg_in,
 
-    // Data outputs
-    output wire [15:0] alu_result_out,
-    output wire [15:0] rs2_data_out,
-    output wire [3:0] rd_out,
+    // Outputs to MEM stage
+    output reg [15:0] alu_result_out,
+    output reg [15:0] rs2_data_out,
+    output reg [3:0] rd_out,
 
-    // Control outputs
-    output wire reg_write_out,
-    output wire mem_read_out,
-    output wire mem_write_out,
-    output wire mem_to_reg_out
+    output reg reg_write_out,
+    output reg mem_read_out,
+    output reg mem_write_out,
+    output reg mem_to_reg_out
 );
 
-    // Passthrough assignments - all signals go directly through
-    assign alu_result_out = alu_result_in;
-    assign rs2_data_out = rs2_data_in;
-    assign rd_out = rd_in;
+    always @(posedge clk or posedge rst) begin
+        if (rst) begin
+            alu_result_out <= 16'd0;
+            rs2_data_out   <= 16'd0;
+            rd_out         <= 4'd0;
 
-    assign reg_write_out = reg_write_in;
-    assign mem_read_out = mem_read_in;
-    assign mem_write_out = mem_write_in;
-    assign mem_to_reg_out = mem_to_reg_in;
+            reg_write_out  <= 1'b0;
+            mem_read_out   <= 1'b0;
+            mem_write_out  <= 1'b0;
+            mem_to_reg_out <= 1'b0;
+        end
+        else begin
+            alu_result_out <= alu_result_in;
+            rs2_data_out   <= rs2_data_in;
+            rd_out         <= rd_in;
+
+            reg_write_out  <= reg_write_in;
+            mem_read_out   <= mem_read_in;
+            mem_write_out  <= mem_write_in;
+            mem_to_reg_out <= mem_to_reg_in;
+        end
+    end
 
 endmodule
 
@@ -913,10 +895,13 @@ module id_stage(
     output wire [3:0] rs2,
     output wire [15:0] rs1_data,
     output wire [15:0] rs2_data,
-    output wire [15:0] imm,
-    output wire [15:0] pc_out
+    output wire [15:0] imm_i,
+    output wire [15:0] imm_b,
+    output wire [15:0] pc_out,
+    output wire is_nop
 );
 
+    assign is_nop = (id_instr ==  16'h0000);
     // ====== Instruction Decode ======
     // Extract fields from 16-bit instruction
     // Format: [15:12] opcode | [11:8] rd | [7:4] rs1 | [3:0] rs2/imm
@@ -928,7 +913,8 @@ module id_stage(
     // Sign-extend 4-bit immediate to 16 bits
     // If bit[3] = 1 (negative), fill upper 12 bits with 1's
     // If bit[3] = 0 (positive), fill upper 12 bits with 0's
-    assign imm = {{12{id_instr[3]}}, id_instr[3:0]};
+    assign imm_i = {{12{id_instr[3]}}, id_instr[3:0]};
+    assign imm_b = {{12{id_instr[11]}}, id_instr[11:8]};
 
     // Pass PC forward for branch target calculation
     assign pc_out = id_pc;
@@ -1045,32 +1031,71 @@ module imem(
 endmodule
 
 `timescale 1ns/1ns
+`include "def_opcode.v"
 
-// ============================================
-// Instruction Memory (IMEM)
-// ============================================
-// Read-only memory that stores program instructions
-// - 256 words × 16-bit
-// - Asynchronous read (combinational)
-// - Initialized from "program.hex" file
+// mem stage
 
-module imem(
-    input wire [15:0] addr,
-    output wire [15:0] instr
+module mem_stage (
+    input wire clk,
+    input wire rst,
+
+    input wire mem_read_in,
+    input wire mem_write_in,
+    input wire mem_to_reg_in,
+    input wire reg_write_in,
+
+    input wire [15:0] alu_result_in,
+    input wire [15:0] rs2_data_in,
+    input wire [3:0] rd_in,
+
+    output reg mem_to_reg_out,
+    output reg reg_write_out,
+    output reg [15:0] alu_result_out,
+    output reg [15:0] mem_data_out,
+    output reg [3:0] rd_out
 );
 
-    // 256 x 16-bit instruction memory
-    reg [15:0] mem [0:255];
 
-    // Initialize memory from hex file at simulation start
-    initial begin
-        $readmemh("program.hex", mem);
+    reg [15:0] dmem[0:255];
+    integer i;
+    initial begin 
+        for ( i=0; i<256; i=i+1)
+            dmem[i] = 16'd0;
+    end
+    wire [7:0] mem_addr = alu_result_in[7:0];
+
+    always @(posedge clk or posedge rst ) begin
+        if (rst) begin
+            mem_data_out <= 16'd0;
+        end
+        else begin 
+            if (mem_write_in) begin
+                dmem[mem_addr] <= rs2_data_in;
+            end
+
+            if (mem_read_in) begin
+                mem_data_out <= dmem[mem_addr];
+            end
+            else begin
+                mem_data_out <= 16'd0;
+            end
+        end
     end
 
-    // Asynchronous read - instruction available immediately
-    // Uses lower 8 bits of address (256 word address space)
-    assign instr = mem[addr[7:0]];
-
+    always @(posedge clk or posedge rst ) begin
+        if (rst) begin
+            mem_to_reg_out <= 1'b0;
+            reg_write_out <= 1'b0;
+            alu_result_out <= 16'd0;
+            rd_out <= 4'd0;
+        end
+        else begin 
+            mem_to_reg_out <= mem_to_reg_in;
+            reg_write_out <= reg_write_in;
+            alu_result_out <= alu_result_in;
+            rd_out <= rd_in;
+        end
+    end
 endmodule
 
 `timescale 1ns/1ns
@@ -1418,20 +1443,10 @@ endmodule
 
 `timescale 1ns/1ns
 
-// ============================================
-// MEM/WB Pipeline Register
-// ============================================
-// Pipeline register between MEM and WB stages
-// Stores all data and control signals needed by WB stage
-//
-// Features:
-// - Final pipeline register before write-back
-// - Passes ALU result and memory data
-// - Control signal determines which data to write
-
 module pipe_mem_wb(
     input wire clk,
     input wire rst,
+    input wire flush,           
 
     // Inputs from MEM stage
     input wire mem_to_reg_in,
@@ -1450,20 +1465,26 @@ module pipe_mem_wb(
 
     always @(posedge clk or posedge rst) begin
         if (rst) begin
-            // Reset: Clear all registers
             mem_to_reg <= 1'b0;
-            reg_write <= 1'b0;
+            reg_write  <= 1'b0;
             alu_result <= 16'd0;
-            mem_data <= 16'd0;
-            rd <= 4'd0;
+            mem_data   <= 16'd0;
+            rd         <= 4'd0;
+        end
+        else if (flush) begin
+            //  Inject NOP into WB
+            mem_to_reg <= 1'b0;
+            reg_write  <= 1'b0;
+            alu_result <= 16'd0;
+            mem_data   <= 16'd0;
+            rd         <= 4'd0;
         end
         else begin
-            // Normal operation: Latch all inputs
             mem_to_reg <= mem_to_reg_in;
-            reg_write <= reg_write_in;
+            reg_write  <= reg_write_in;
             alu_result <= alu_result_in;
-            mem_data <= mem_data_in;
-            rd <= rd_in;
+            mem_data   <= mem_data_in;
+            rd         <= rd_in;
         end
     end
 
@@ -1564,10 +1585,9 @@ def decode(instr):
     return op, rd, rs1, rs2
 
 def sign_extend_4bit(val):
-    """Sign extend 4-bit immediate to 16-bit"""
-    if val & 0x8:  # Check if bit 3 is set (negative)
-        return val | 0xFFF0
-    return val
+    """4-bit immediate treated as unsigned (0–15)"""
+    return val & 0xF
+
 
 def to_signed(val):
     """Convert 16-bit unsigned to signed"""
@@ -1820,21 +1840,33 @@ while (not halt_seen or not all(pipeline[s].get('instr') == NOP for s in ['ID', 
         'pc': ex1_stage.get('pc', 0)
     }
     
-    # ======== Branch Decision in EX2 ========
+    # ======== Branch/Jump Decision in EX2 ========
     ex2_instr_check = pipeline['EX2'].get('instr')
     if ex2_instr_check and ex2_instr_check != NOP:
-        op2, rd2, _, _ = decode(ex2_instr_check)
+        op2, rd2, rs1_2, rs2_2 = decode(ex2_instr_check)
         ex2_zero = pipeline['EX2'].get('zero', 0)
-        
+
+        branch_taken = False
+        new_pc = None
+
         if op2 == 12:  # BEQ
             if ex2_zero == 1:
-                new_pc = pipeline['EX2'].get('branch_target', 0)
+                new_pc = pipeline['EX2']['branch_target']
                 branch_taken = True
         elif op2 == 13:  # BNE
             if ex2_zero == 0:
-                new_pc = pipeline['EX2'].get('branch_target', 0)
+                new_pc = pipeline['EX2']['branch_target']
                 branch_taken = True
-    
+        elif op2 == 14:  # JUMP
+            new_pc = pipeline['EX2']['branch_target']
+            branch_taken = True
+
+        if branch_taken and new_pc is not None:
+            # Flush IF + ID
+            pipeline['IF'] = {'instr': NOP, 'pc': 0}
+            pipeline['ID'] = {'instr': NOP, 'pc': 0}
+            pc = new_pc
+
     # ======== Hazard Detection ========
     stall = hazard_stall(pipeline['ID'].get('instr'), pipeline['EX1'])
     
@@ -1897,9 +1929,8 @@ print(f"\n=== SIMULATION COMPLETE (cycles: {cycle_count}) ===")
 print_registers()
 
 //program.hex
-6103
-6200
-6221
-611f
-d10d
+6105
+e002
+6209
+6307
 f000

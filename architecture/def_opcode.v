@@ -1,9 +1,8 @@
 `ifndef AK16_OPCODE_V
 `define AK16_OPCODE_V
 
-// ============================================
 // AK-16 CPU Opcode Definitions
-// ============================================
+
 // Instruction format: [15:12] Opcode | [11:8] rd | [7:4] rs1 | [3:0] rs2/imm
 
 // ============ System Instructions ============
