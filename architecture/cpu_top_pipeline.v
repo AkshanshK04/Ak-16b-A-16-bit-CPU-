@@ -6,7 +6,7 @@ module cpu_top_pipeline (
     input wire rst
 );
 
-    // ============ Wires for all stages ============
+    // Wires for all stages 
     
     // IF Stage
     wire [15:0] if_pc, if_instr;
@@ -63,7 +63,7 @@ module cpu_top_pipeline (
             halted <= 1'b1;
     end
 
-    // ============ Hazard Detection ============
+    // Hazard Detection
     hazard_unit u_hazard (
         .ifid_rs1(id_rs1),
         .ifid_rs2(id_rs2),
@@ -77,17 +77,17 @@ module cpu_top_pipeline (
     // Stall when hazard detected
     assign stall_signal = ~ifid_write_en;
     
-    // Jump detection in ID stage - FIXED: Use 12-bit immediate
+    // Jump detection in ID stage 
     assign jump_taken = id_jump && !stall_signal;
     assign jump_target = {{4{id_instr[11]}}, id_instr[11:0]};  // Sign-extend 12-bit for JUMP
     
     // Branch decision in EX2 stage
     assign branch_taken = (ex2_branch && ex2_zero) || (ex2_branch_ne && !ex2_zero);
     
-    // Flush IF/ID when branch or jump taken
+    // Flush IF/ID if branch or jump taken
     assign if_flush = branch_taken || jump_taken;
     
-    // ============ IF Stage ============
+    // IF Stage 
     if_stage u_if (
         .clk(clk),
         .rst(rst),
@@ -102,7 +102,7 @@ module cpu_top_pipeline (
         .if_instr(if_instr)
     );
 
-    // ============ IF/ID Pipeline ============
+    // IF/ID Pipeline 
     pipe_if_id u_if_id (
         .clk(clk),
         .rst(rst),
@@ -114,7 +114,7 @@ module cpu_top_pipeline (
         .id_instr(id_instr)
     );
 
-    // ============ ID Stage ============
+    // ID Stage 
     assign id_opcode = id_instr[15:12];
     assign id_rd = id_instr[11:8];
     assign id_rs1 = id_instr[7:4];
@@ -148,7 +148,7 @@ module cpu_top_pipeline (
         .rs2_data(id_rs2_data)
     );
 
-    // ============ ID/EX Pipeline ============
+    // ID/EX Pipeline
     pipe_id_ex u_id_ex (
         .clk(clk),
         .rst(rst),
@@ -185,7 +185,7 @@ module cpu_top_pipeline (
         .ex_branch_ne(ex1_branch_ne)
     );
 
-    // ============ Forwarding Unit ============
+    // Forwarding Unit 
     forwarding_unit u_fwd (
         .idex_rs1(ex1_rs1),
         .idex_rs2(ex1_rs2),
@@ -198,7 +198,7 @@ module cpu_top_pipeline (
         .forward_b(forward_b)
     );
 
-    // ============ EX1 Stage ============
+    // EX1 Stage 
     // Forwarding muxes - forward from EX2 or MEM stage
     assign ex1_rs1_fwd = (forward_a == 2'b10) ? ex2_alu_result :
                          (forward_a == 2'b01) ? mem_alu_result : 
@@ -223,7 +223,7 @@ module cpu_top_pipeline (
     // Branch target calculation
     assign ex1_branch_target = ex1_pc + ex1_imm;
 
-    // ============ EX1/EX2 Pipeline ============
+    // EX1/EX2 Pipeline
     pipe_ex1_ex2 u_ex1_ex2 (
         .clk(clk),
         .rst(rst),
@@ -251,7 +251,7 @@ module cpu_top_pipeline (
         .ex2_branch_ne(ex2_branch_ne)
     );
 
-    // ============ EX2/MEM Pipeline ============
+    // EX2/MEM Pipeline
     pipe_ex2_mem u_ex2_mem (
         .clk(clk),
         .rst(rst),
@@ -280,7 +280,7 @@ module cpu_top_pipeline (
         .mem_zero(mem_zero)
     );
 
-    // ============ MEM Stage ============
+    // MEM Stage
     dmem u_dmem (
         .clk(clk),
         .addr(mem_alu_result),
@@ -290,7 +290,7 @@ module cpu_top_pipeline (
         .read_data(mem_read_data)
     );
 
-    // ============ MEM/WB Pipeline ============
+    // MEM/WB Pipeline
     pipe_mem_wb u_mem_wb (
         .clk(clk),
         .rst(rst),
@@ -306,7 +306,7 @@ module cpu_top_pipeline (
         .rd(wb_rd)
     );
 
-    // ============ WB Stage ============
+    // WB Stage
     assign wb_write_data = wb_mem_to_reg ? wb_mem_data : wb_alu_result;
 
 endmodule
