@@ -1,8 +1,7 @@
 `timescale 1ns/1ns
 
-// ============================================
 // Forwarding Unit
-// ============================================
+// 
 // Detects data hazards and generates forwarding control signals
 // for EX1 stage to forward data from EX2 or MEM stages
 //
@@ -35,32 +34,32 @@ module forwarding_unit (
         forward_a = 2'b00;
         forward_b = 2'b00;
 
-        // ====== Forwarding for rs1 (operand A) ======
+        // Forwarding for rs1 (operand A)
         
-        // EX2 hazard (most recent - highest priority)
+        // EX2 hazard ( highest priority)
         // Forward from EX2 if:
-        // 1. EX2 will write to a register (exmem_reg_write)
-        // 2. NOT a load instruction (load data not ready yet)
-        // 3. Destination is not R0
-        // 4. Destination matches source rs1
+        // EX2 will write to a register (exmem_reg_write)
+        // NOT a load instruction (load data not ready yet)
+        // Destination is not R0
+        // Destination matches source rs1
         if (exmem_reg_write && !exmem_mem_to_reg &&
             exmem_rd != 4'd0 &&
             exmem_rd == idex_rs1) begin
             forward_a = 2'b10;
         end
-        // MEM hazard (older data - lower priority)
+        // MEM hazard ( lower priority)
         // Forward from MEM if:
-        // 1. MEM will write to a register
-        // 2. Destination is not R0
-        // 3. No EX2 hazard for same register (EX2 has priority)
-        // 4. Destination matches source rs1
+        // MEM will write to a register
+        // Destination is not R0
+        // No EX2 hazard for same register (EX2 has priority)
+        // Destination matches source rs1
         else if (memwb_reg_write && memwb_rd != 4'd0 &&
                  !(exmem_reg_write && !exmem_mem_to_reg && exmem_rd == idex_rs1) &&
                  memwb_rd == idex_rs1) begin
             forward_a = 2'b01;
         end
 
-        // ====== Forwarding for rs2 (operand B) ======
+        // Forwarding for rs2 (operand B)
         
         // EX2 hazard (most recent - highest priority)
         if (exmem_reg_write && !exmem_mem_to_reg &&
