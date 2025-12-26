@@ -1,18 +1,17 @@
 `timescale 1ns/1ns
 
-// ============================================
 // Hazard Detection Unit
-// ============================================
+
 // Detects load-use data hazards and generates stall signals
-//
+
 // Load-Use Hazard occurs when:
-// - A load instruction (LW) is in EX1 stage
-// - The following instruction in ID stage needs the loaded data
-// 
-// Solution: Stall pipeline for 1 cycle
-// - Freeze PC (don't fetch new instruction)
-// - Freeze IF/ID register (keep current instruction in ID)
-// - Insert bubble in ID/EX (flush to NOP)
+//  A load instruction (LW) is in EX1 stage
+// The following instruction in ID stage needs the loaded data
+
+// Stall pipeline for 1 cycle
+// Freeze PC (don't fetch new instruction)
+// Freeze IF/ID register (keep current instruction in ID)
+// Insert bubble in ID/EX (flush to NOP)
 
 module hazard_unit (
     // Source registers from IF/ID pipeline (ID stage)
@@ -38,7 +37,7 @@ module hazard_unit (
         idex_flush = 1'b0;
 
         // Detect load-use hazard:
-        // If there's a load instruction in EX1 (idex_mem_read = 1)
+        // If there is a load instruction in EX1 (idex_mem_read = 1)
         // AND its destination register (idex_rd) matches either source
         // register (ifid_rs1 or ifid_rs2) of the instruction in ID stage
         // AND destination is not R0 (R0 is always 0, no hazard possible)
