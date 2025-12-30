@@ -1,10 +1,8 @@
 `timescale 1ns/1ns
 `include "def_opcode.v"
 
-// ============================================
 // ID (Instruction Decode) Stage
-// ============================================
-// Responsibilities:
+// tasks:
 // 1. Decode instruction fields (opcode, rd, rs1, rs2)
 // 2. Sign-extend immediate value
 // 3. Read register file
@@ -37,7 +35,7 @@ module id_stage(
 );
 
     assign is_nop = (id_instr ==  16'h0000);
-    // ====== Instruction Decode ======
+    // Instruction Decode 
     // Extract fields from 16-bit instruction
     // Format: [15:12] opcode | [11:8] rd | [7:4] rs1 | [3:0] rs2/imm
     assign opcode = id_instr[15:12];
@@ -54,7 +52,7 @@ module id_stage(
     // Pass PC forward for branch target calculation
     assign pc_out = id_pc;
     
-    // ====== Register File ======
+    // Register File
     regfile u_regfile (
         .clk(clk),
         .rst(rst),
