@@ -1,14 +1,12 @@
 `timescale 1ns/1ns
 `include "def_opcode.v"
 
-// ============================================
 // IF (Instruction Fetch) Stage
-// ============================================
-// Responsibilities:
-// 1. Maintain Program Counter (PC)
-// 2. Fetch instruction from instruction memory
-// 3. Handle PC updates (sequential, branch, jump)
-// 4. Support stall and flush operations
+// Tasks:
+// Maintain Program Counter (PC)
+// Fetch instruction from instruction memory
+// Handle PC updates (sequential, branch, jump)
+// Support stall and flush operations
 
 module if_stage(
     input wire clk,
@@ -32,13 +30,13 @@ module if_stage(
     output wire [15:0] if_instr   // Fetched instruction
 );
 
-    // ====== Instruction Memory ======
+    //Instruction Memory
     imem u_imem (
         .addr(if_pc),
         .instr(if_instr)
     );
 
-    // ====== PC Update Logic ======
+    //PC Update Logic
     always @(posedge clk or posedge rst) begin
         if (rst) begin
             // Reset: Start execution from address 0
