@@ -1,8 +1,6 @@
 `timescale 1ns/1ns
 
-// ============================================
 // Instruction Memory (IMEM)
-// ============================================
 // Read-only memory that stores program instructions
 // - 256 words × 16-bit
 // - Asynchronous read (combinational)
