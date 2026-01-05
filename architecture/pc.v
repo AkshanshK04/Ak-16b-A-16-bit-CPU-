@@ -1,16 +1,10 @@
 `timescale 1ns/1ns
 
-// ============================================
 // Program Counter (PC) Register
-// ============================================
-// NOTE: This is a standalone PC module, but in our 6-stage pipeline,
-// the PC is managed directly in the if_stage module.
-// This module is provided for reference or alternative designs.
-//
 // Functionality:
-// - Holds current program counter value
-// - Updates on clock edge when enabled
-// - Can be stalled for hazard handling
+// Holds current program counter value
+// Updates on clock edge when enabled
+// Can be stalled for hazard handling
 
 module pc(
     input wire clk,
